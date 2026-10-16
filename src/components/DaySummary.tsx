@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, isYouthAthlete, restOfDayPhase } from "../lib/fueling";
+import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, restOfDayPhase } from "../lib/fueling";
 import { hhmmFromIso, localIso } from "../lib/date";
 import CarbAmpel from "./CarbAmpel";
 import Tip from "./Tip";
@@ -96,10 +96,27 @@ export default function DaySummary({
 
   const loggedCarbs = logsToday.reduce((sum, l) => sum + Number(l.carbs_g), 0);
   const loggedProtein = logsToday.reduce((sum, l) => sum + Number(l.protein_g), 0);
+  const loggedFat = logsToday.reduce((sum, l) => sum + Number(l.fat_g), 0);
+
+  // Energieziel-Engine (DUO-33): Tagesbedarf und Bilanz aus geloggten Makros
+  const energyTarget = estimateDailyEnergyNeed({ weightKg, ageYears, trainingMinutes: minutes, maxIntensity });
+  const balance = energyBalanceFor(
+    { carbsG: loggedCarbs, proteinG: loggedProtein, fatG: loggedFat },
+    energyTarget.totalKcal,
+    youth
+  );
 
   const warnings = logsToday.length > 0
     ? buildRedsWarnings({ dayType, trainingMinutes: minutes, loggedCarbsG: loggedCarbs, targetCarbsG: dailyTargetG, isYouth: youth })
     : [];
+  // Abend-Check der Energiebilanz (DUO-33): frueh am Tag waere die Warnung nur noise
+  const nowHour = new Date().getHours();
+  if (isToday && logsToday.length > 0 && nowHour >= 17 && balance.level !== "ok") {
+    warnings.push(
+      "Energiebilanz am Abend: erst " + balance.pct + "% des Tagesbedarfs (ca. " + balance.loggedKcal + " von " + balance.targetKcal + " kcal)" +
+        (youth ? " – im Wachstum darf die Bilanz nicht ins Minus laufen (RED-S-Schutz)." : " – jetzt noch eine kohlenhydratreiche Mahlzeit für die Regeneration.")
+    );
+  }
 
   const phases: CarbAmpelPhase[] = longestSession
     ? [
@@ -147,6 +164,8 @@ export default function DaySummary({
   const proteinExplain = youth
     ? "Protein-Ziel: ca. " + targets.proteinPerKg + " g pro kg Körpergewicht – im Jugend-Wachstum etwas höher, wichtig für Muskelaufbau, Knochen und Regeneration."
     : "Protein-Ziel: ca. 1,6 g pro kg Körpergewicht für Muskelerhalt und Regeneration – auch am Ruhetag wichtig.";
+
+  const energyExplain = "Tagesenergie: Grundumsatz " + energyTarget.rmrKcal + " kcal (Schofield-Schätzung nach Alter und Gewicht) plus Alltag " + energyTarget.dailyLifeKcal + " kcal (Faktor 1,4) plus Training " + energyTarget.trainingKcal + " kcal (METs aus Dauer und Intensität) = ca. " + energyTarget.totalKcal + " kcal. Schätzwert – der Balken füllt sich über den Tag aus den geloggten Makros (4 kcal/g KH und Protein, 9 kcal/g Fett).";
 
   let nextStep: string;
   if (todays.length === 0) {
@@ -205,6 +224,13 @@ export default function DaySummary({
           value={loggedProtein}
           max={proteinTargetG}
           explain={proteinExplain}
+        />
+        <Bar
+          label="Energie"
+          unit="kcal"
+          value={balance.loggedKcal}
+          max={energyTarget.totalKcal}
+          explain={energyExplain}
         />
       </div>
 

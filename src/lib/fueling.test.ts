@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, isYouthAthlete, restOfDayPhase, youthDailyCarbsPerKg } from "./fueling";
+import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, restOfDayPhase, youthDailyCarbsPerKg } from "./fueling";
 
 const input = (durationMin: number, intensity: "low" | "moderate" | "high", heat: "normal" | "hot", bodyWeightKg: number) =>
   calculateFuelingPlan({ durationMin, intensity, heat, bodyWeightKg });
@@ -153,5 +153,48 @@ describe("Youth Mode (DUO-31)", () => {
     expect(youth.join(" ")).toContain("Wachstum");
     const adult = buildRedsWarnings({ dayType: "rest", trainingMinutes: 0, loggedCarbsG: 50, targetCarbsG: 240, isYouth: false });
     expect(adult.join(" ")).not.toContain("Wachstum");
+  });
+});
+
+describe("Energieziel-Engine (DUO-33)", () => {
+  it("Grundumsatz nach Alter (Schofield, vereinfacht)", () => {
+    expect(estimateDailyEnergyNeed({ weightKg: 60, ageYears: 15, trainingMinutes: 0, maxIntensity: "low" }).rmrKcal).toBe(1719);
+    expect(estimateDailyEnergyNeed({ weightKg: 70, ageYears: 22, trainingMinutes: 0, maxIntensity: "low" }).rmrKcal).toBe(1749);
+    expect(estimateDailyEnergyNeed({ weightKg: 70, ageYears: 30, trainingMinutes: 0, maxIntensity: "low" }).rmrKcal).toBe(1678);
+  });
+
+  it("Trainingskosten skalieren mit Dauer und Intensitaet (METs)", () => {
+    const light = estimateDailyEnergyNeed({ weightKg: 70, ageYears: 30, trainingMinutes: 60, maxIntensity: "low" });
+    const hard = estimateDailyEnergyNeed({ weightKg: 70, ageYears: 30, trainingMinutes: 120, maxIntensity: "high" });
+    expect(light.trainingKcal).toBe(441);
+    expect(hard.trainingKcal).toBe(1470);
+    expect(hard.trainingKcal).toBeGreaterThan(light.trainingKcal);
+  });
+
+  it("Zielwert ist Summe aus Grundumsatz, Alltag und Training", () => {
+    const e = estimateDailyEnergyNeed({ weightKg: 70, ageYears: 30, trainingMinutes: 90, maxIntensity: "moderate" });
+    expect(e.totalKcal).toBe(e.rmrKcal + e.dailyLifeKcal + e.trainingKcal);
+  });
+
+  it("Energiebilanz aus Makros: 4/4/9 kcal pro Gramm", () => {
+    const b = energyBalanceFor({ carbsG: 200, proteinG: 100, fatG: 60 }, 2500, false);
+    expect(b.loggedKcal).toBe(1740);
+    expect(b.pct).toBe(70);
+    expect(b.level).toBe("watch");
+  });
+
+  it("Jugend-Schwellen sind strenger als Erwachsenen-Schwellen", () => {
+    const adult = energyBalanceFor({ carbsG: 200, proteinG: 100, fatG: 60 }, 3000, false);
+    const youth = energyBalanceFor({ carbsG: 200, proteinG: 100, fatG: 60 }, 3000, true);
+    expect(adult.pct).toBe(58);
+    expect(adult.level).toBe("watch");
+    expect(youth.level).toBe("risk");
+  });
+
+  it("Ausreichende Zufuhr ist ok, auch fuer Jugend", () => {
+    const ok = energyBalanceFor({ carbsG: 300, proteinG: 120, fatG: 80 }, 3000, false);
+    expect(ok.loggedKcal).toBe(2400);
+    expect(ok.pct).toBe(80);
+    expect(ok.level).toBe("ok");
   });
 });

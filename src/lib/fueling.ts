@@ -356,3 +356,68 @@ export function buildRedsWarnings(input: RedsCheckInput): string[] {
   }
   return warnings;
 }
+
+/*
+ * Energieziel-Engine (DUO-33): Tagesenergiebedarf und RED-S-Energiebilanz.
+ * Schaetzung, nicht Messung - jeder Bestandteil ist im Tooltip erklaert:
+ * - Grundumsatz (RMR) nach Schofield-Gleichungen (maennlich, altersabhaengig)
+ * - Alltag: + 40% auf den Grundumsatz (leicht aktiver Tag, PA-Faktor 1,4)
+ * - Training: METs (Radsport: leicht 6, mittel 8, hoch 10),
+ *   kcal/min = MET x 3,5 x kg / 200
+ * - Bilanz aus geloggten Makros (4 kcal/g KH, 4 kcal/g Protein, 9 kcal/g Fett)
+ */
+export interface DailyEnergyTarget {
+  rmrKcal: number;
+  dailyLifeKcal: number;
+  trainingKcal: number;
+  totalKcal: number;
+}
+
+export function estimateDailyEnergyNeed(input: {
+  weightKg: number;
+  ageYears: number | null;
+  trainingMinutes: number;
+  maxIntensity: Intensity;
+}): DailyEnergyTarget {
+  const w = input.weightKg;
+  const age = input.ageYears === null ? 30 : input.ageYears;
+  // Grundumsatz (Schofield, maennlich, vereinfacht)
+  let rmr: number;
+  if (age >= 10 && age <= 17) {
+    rmr = 17.7 * w + 657;
+  } else if (age <= 29) {
+    rmr = 15.1 * w + 692;
+  } else {
+    rmr = 11.5 * w + 873;
+  }
+  const dailyLife = rmr * 0.4;
+  const met = input.maxIntensity === "high" ? 10 : input.maxIntensity === "moderate" ? 8 : 6;
+  const training = (met * 3.5 * w / 200) * input.trainingMinutes;
+  return {
+    rmrKcal: Math.round(rmr),
+    dailyLifeKcal: Math.round(dailyLife),
+    trainingKcal: Math.round(training),
+    totalKcal: Math.round(rmr + dailyLife + training)
+  };
+}
+
+export interface EnergyBalance {
+  loggedKcal: number;
+  targetKcal: number;
+  pct: number;
+  level: "ok" | "watch" | "risk";
+}
+
+export function energyBalanceFor(
+  logged: { carbsG: number; proteinG: number; fatG: number },
+  targetKcal: number,
+  isYouth: boolean
+): EnergyBalance {
+  const loggedKcal = Math.round(logged.carbsG * 4 + logged.proteinG * 4 + logged.fatG * 9);
+  const pct = targetKcal > 0 ? Math.round((loggedKcal / targetKcal) * 100) : 0;
+  // Jugendliche: engere Schwellen (RED-S-Schutz, Wachstum)
+  const okAt = isYouth ? 85 : 75;
+  const watchAt = isYouth ? 65 : 55;
+  const level = pct >= okAt ? "ok" : pct >= watchAt ? "watch" : "risk";
+  return { loggedKcal, targetKcal, pct, level };
+}
