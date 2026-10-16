@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateFuelingPlan } from "./fueling";
+import { buildCarbAmpel, calculateFuelingPlan, dayTypeFor, dayTypeLabel, restOfDayPhase } from "./fueling";
 
 const input = (durationMin: number, intensity: "low" | "moderate" | "high", heat: "normal" | "hot", bodyWeightKg: number) =>
   calculateFuelingPlan({ durationMin, intensity, heat, bodyWeightKg });
@@ -53,5 +53,39 @@ describe("calculateFuelingPlan", () => {
     expect(input(90, "low", "normal", 70).dailyCarbsPerKg).toBe(4);
     expect(input(90, "moderate", "normal", 70).dailyCarbsPerKg).toBe(6);
     expect(input(90, "high", "normal", 70).dailyCarbsPerKg).toBe(8);
+  });
+});
+
+describe("Carb-Coding-Ampel (DUO-28)", () => {
+  it("Ruhetag ohne nennenswertes Training", () => {
+    expect(dayTypeFor(0, "low", 0)).toBe("rest");
+    expect(dayTypeLabel("rest")).toBe("Ruhetag");
+    expect(restOfDayPhase("rest", 70).color).toBe("yellow");
+  });
+
+  it("Belastungstag bei moderater Laengereinheit", () => {
+    expect(dayTypeFor(90, "moderate", 90)).toBe("load");
+    expect(dayTypeLabel("load")).toBe("Belastungstag");
+  });
+
+  it("Wettkampftag bei langer intensiver Einheit", () => {
+    expect(dayTypeFor(120, "high", 120)).toBe("race");
+    expect(dayTypeLabel("race")).toBe("Wettkampftag");
+    expect(restOfDayPhase("race", 70).color).toBe("green");
+  });
+
+  it("Kurze Einheit: pre gelb, during rot, post gelb", () => {
+    const ampel = buildCarbAmpel({ durationMin: 30, intensity: "moderate", heat: "normal", bodyWeightKg: 70 });
+    expect(ampel.find((p) => p.key === "pre")?.color).toBe("yellow");
+    expect(ampel.find((p) => p.key === "during")?.color).toBe("red");
+    expect(ampel.find((p) => p.key === "post")?.color).toBe("yellow");
+  });
+
+  it("Lange intensive Einheit: during und post gruen, alle Phasen erklaert", () => {
+    const ampel = buildCarbAmpel({ durationMin: 180, intensity: "high", heat: "normal", bodyWeightKg: 70 });
+    expect(ampel.find((p) => p.key === "pre")?.color).toBe("green");
+    expect(ampel.find((p) => p.key === "during")?.color).toBe("green");
+    expect(ampel.find((p) => p.key === "post")?.color).toBe("green");
+    ampel.forEach((p) => expect(p.explanation.length).toBeGreaterThan(10));
   });
 });

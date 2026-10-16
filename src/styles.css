@@ -38,3 +38,24 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .barcol.today .bar { background: #22c55e; }
 .barlabel { font-size: 12px; color: #94a3b8; margin-top: 6px; }
 .barmin { font-size: 11px; color: #64748b; min-height: 14px; }
+/* Carb-Coding-Ampel (DUO-28) */
+.ampel { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 4px; }
+.ampel-item { display: flex; gap: 10px; align-items: flex-start; background: #0f172a; border-radius: 8px; padding: 8px 10px; }
+.ampel-dot { font-size: 18px; line-height: 1.1; }
+.ampel-red { color: #f87171; }
+.ampel-yellow { color: #fbbf24; }
+.ampel-green { color: #4ade80; }
+.ampel-label { font-size: 14px; }
+.ampel-explain { margin: 2px 0 0; font-size: 12px; color: #94a3b8; }
+.badge { display: inline-block; vertical-align: middle; background: #334155; color: #cbd5e1; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; margin-left: 8px; }
+/* Turbo-Logging (DUO-30) */
+.favs { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.favwrap { display: inline-flex; align-items: stretch; }
+.favwrap .fav { margin: 0; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; font-weight: 600; font-size: 13px; padding: 8px 12px; }
+.favwrap .fav:hover { border-color: #22c55e; filter: none; }
+.favdel { margin: 0 0 0 4px; padding: 8px 10px; background: transparent; color: #64748b; font-size: 14px; }
+.favdel:hover { color: #f87171; filter: none; }
+.quickadd { display: flex; gap: 8px; margin-top: 12px; }
+.quickadd input { flex: 1; }
+.quickadd input[type="number"] { flex: none; width: 90px; }
+.quickadd button { margin-top: 0; white-space: nowrap; }
