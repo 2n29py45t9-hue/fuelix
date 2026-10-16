@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
-import { localIso } from "../lib/date";
 import type { MealFavorite, MealPhase } from "../types";
 
-const phaseLabels: Record<MealPhase, string> = {
-  pre: "Vor der Einheit",
-  during: "Waehrend",
-  post: "Danach",
-  snack: "Snack / sonstige"
-};
-
-export default function QuickLog({ onLogged }: { onLogged: () => void }) {
+/* Turbo-Logging (DUO-30) - jetzt als Bottom-Sheet vom FAB (DUO-32):
+ * Favorit antippen, fertig. Unter 3 Sekunden. */
+export default function QuickLog({
+  onLogged,
+  onClose,
+  logDate
+}: {
+  onLogged: () => void;
+  onClose?: () => void;
+  logDate: string;
+}) {
   const [favorites, setFavorites] = useState<MealFavorite[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -22,7 +24,7 @@ export default function QuickLog({ onLogged }: { onLogged: () => void }) {
   const [favFat, setFavFat] = useState(8);
   const [quickName, setQuickName] = useState("");
   const [quickCarbs, setQuickCarbs] = useState(50);
-  // Interne Anti-Friction-Metrik (DUO-30): Zeit von App-Oeffnung bzw. letztem Log bis zum Klick.
+  // Interne Anti-Friction-Metrik (DUO-30): Zeit vom Sheet-Oeffnen bis zum Log.
   const startRef = useRef(Date.now());
 
   const loadFavorites = useCallback(async () => {
@@ -47,7 +49,7 @@ export default function QuickLog({ onLogged }: { onLogged: () => void }) {
   }) => {
     const now = Date.now();
     const { error: logError } = await supabase.from("meal_logs").insert({
-      log_date: localIso(),
+      log_date: logDate,
       logged_ms: now - startRef.current,
       ...payload
     });
@@ -114,9 +116,17 @@ export default function QuickLog({ onLogged }: { onLogged: () => void }) {
   };
 
   return (
-    <div className="card">
-      <h2>Turbo-Logging</h2>
-      <p className="muted">Mahlzeit in unter 30 Sekunden: Favorit anklicken, fertig.</p>
+    <div className="quicksheet">
+      <div className="sheet-grabber" />
+      <div className="sheet-head">
+        <h2>Mahlzeit loggen</h2>
+        {onClose ? (
+          <button type="button" className="sheet-close" onClick={onClose} aria-label="Schliessen">
+            ✕
+          </button>
+        ) : null}
+      </div>
+      <p className="muted">Favorit antippen, fertig - in unter 3 Sekunden.</p>
       {error ? <p className="error">{error}</p> : null}
       {favorites.length === 0 ? (
         <p className="muted">Noch keine Favoriten - lege unten deinen ersten an.</p>
@@ -128,7 +138,7 @@ export default function QuickLog({ onLogged }: { onLogged: () => void }) {
                 className="fav"
                 onClick={() => logFavorite(fav)}
                 disabled={busy === fav.id}
-                title={phaseLabels[fav.phase]}
+                title={fav.phase}
               >
                 {fav.name} · {fav.carbs_g} g KH
               </button>
@@ -143,12 +153,13 @@ export default function QuickLog({ onLogged }: { onLogged: () => void }) {
         <input
           value={quickName}
           onChange={(e) => setQuickName(e.target.value)}
-          placeholder="Schnell loggen ohne Favorit, z. B. Porridge mit Banane"
+          placeholder="Schnell loggen, z. B. Porridge mit Banane"
           required
         />
         <input
           type="number"
           min="0"
+          inputMode="numeric"
           value={quickCarbs}
           onChange={(e) => setQuickCarbs(Number(e.target.value))}
           aria-label="Kohlenhydrate (g)"
@@ -170,11 +181,11 @@ export default function QuickLog({ onLogged }: { onLogged: () => void }) {
             <option value="snack">Snack / sonstige</option>
           </select>
           <label>Kohlenhydrate (g)</label>
-          <input type="number" min="0" value={favCarbs} onChange={(e) => setFavCarbs(Number(e.target.value))} required />
+          <input type="number" min="0" inputMode="numeric" value={favCarbs} onChange={(e) => setFavCarbs(Number(e.target.value))} required />
           <label>Protein (g)</label>
-          <input type="number" min="0" value={favProtein} onChange={(e) => setFavProtein(Number(e.target.value))} required />
+          <input type="number" min="0" inputMode="numeric" value={favProtein} onChange={(e) => setFavProtein(Number(e.target.value))} required />
           <label>Fett (g)</label>
-          <input type="number" min="0" value={favFat} onChange={(e) => setFavFat(Number(e.target.value))} required />
+          <input type="number" min="0" inputMode="numeric" value={favFat} onChange={(e) => setFavFat(Number(e.target.value))} required />
           <button type="submit" disabled={busy === "new"}>
             {busy === "new" ? "Speichere ..." : "Favorit speichern"}
           </button>

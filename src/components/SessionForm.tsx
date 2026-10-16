@@ -5,6 +5,7 @@ import type { TrainingSession } from "../types";
 
 export default function SessionForm({ onCreated }: { onCreated: (s: TrainingSession) => void }) {
   const [sessionDate, setSessionDate] = useState(localIso());
+  const [sessionStart, setSessionStart] = useState("");
   const [sport, setSport] = useState("Radsport");
   const [durationMin, setDurationMin] = useState(90);
   const [intensity, setIntensity] = useState("moderate");
@@ -21,6 +22,7 @@ export default function SessionForm({ onCreated }: { onCreated: (s: TrainingSess
       .from("sessions")
       .insert({
         session_date: sessionDate,
+        session_start: sessionStart || null,
         sport,
         duration_min: Number(durationMin),
         intensity,
@@ -43,6 +45,8 @@ export default function SessionForm({ onCreated }: { onCreated: (s: TrainingSess
       <h2>Training erfassen</h2>
       <label>Datum</label>
       <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} required />
+      <label>Startzeit (optional - fuer die Timeline)</label>
+      <input type="time" value={sessionStart} onChange={(e) => setSessionStart(e.target.value)} />
       <label>Sportart</label>
       <input value={sport} onChange={(e) => setSport(e.target.value)} required />
       <label>Dauer (Minuten)</label>
@@ -50,6 +54,7 @@ export default function SessionForm({ onCreated }: { onCreated: (s: TrainingSess
         type="number"
         min="10"
         step="5"
+        inputMode="numeric"
         value={durationMin}
         onChange={(e) => setDurationMin(Number(e.target.value))}
         required

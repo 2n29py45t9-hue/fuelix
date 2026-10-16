@@ -8,6 +8,7 @@ export type DayType = "rest" | "load" | "race";
 export interface TrainingSession {
   id?: string;
   session_date: string;
+  session_start?: string | null;
   sport: string;
   duration_min: number;
   intensity: Intensity;

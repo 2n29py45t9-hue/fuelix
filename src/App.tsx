@@ -3,15 +3,20 @@ import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { buildCarbAmpel, calculateFuelingPlan } from "./lib/fueling";
 import { buildSessionsCsv, downloadCsv } from "./lib/csv";
+import { localIso } from "./lib/date";
 import type { FuelingPlan, MealLog, TrainingSession } from "./types";
 import Auth from "./components/Auth";
 import SessionForm from "./components/SessionForm";
 import PlanCard from "./components/PlanCard";
 import SessionList from "./components/SessionList";
 import DaySummary from "./components/DaySummary";
+import DayScroller from "./components/DayScroller";
 import WeekView from "./components/WeekView";
 import QuickLog from "./components/QuickLog";
 import RaceDayWizard from "./components/RaceDayWizard";
+import BottomNav from "./components/BottomNav";
+
+type Tab = "plan" | "trends" | "more";
 
 export default function App() {
   const [authSession, setAuthSession] = useState<SupabaseSession | null>(null);
@@ -20,6 +25,9 @@ export default function App() {
   const [weightKg, setWeightKg] = useState(70);
   const [birthYear, setBirthYear] = useState<number | "">("");
   const [selected, setSelected] = useState<TrainingSession | null>(null);
+  const [selectedDate, setSelectedDate] = useState(localIso());
+  const [activeTab, setActiveTab] = useState<Tab>("plan");
+  const [logSheet, setLogSheet] = useState(false);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
@@ -87,57 +95,107 @@ export default function App() {
     return <Auth />;
   }
 
+  const showSession = (s: TrainingSession) => {
+    setSelected(s);
+    setSelectedDate(s.session_date);
+    setActiveTab("plan");
+    const el = document.getElementById("plancard");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className="app">
-      <header>
-        <h1>Fuelix 🚴</h1>
-        <p>Fueling-Plan pro Einheit - dein eigenes Hexis.live</p>
-        <div className="headeractions">
-          <button className="link" onClick={exportCsv}>
-            Export (CSV)
-          </button>
-          <button className="link" onClick={signOut}>
-            Abmelden
+      <header className="appheader">
+        <div className="appheader-inner">
+          <div>
+            <h1>Fuelix</h1>
+            <p className="appheader-sub">Fueling-Plan pro Einheit</p>
+          </div>
+          <button type="button" className="headeravatar" onClick={() => setActiveTab("more")} aria-label="Profil und Einstellungen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+            </svg>
           </button>
         </div>
       </header>
-      <DaySummary sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} />
-      <div className="weight">
-        <label htmlFor="weight">Koerpergewicht (kg): </label>
-        <input
-          id="weight"
-          type="number"
-          min="30"
-          max="150"
-          value={weightKg}
-          onChange={(e) => setWeightKg(Number(e.target.value))}
-          onBlur={saveProfile}
-        />
-        <label htmlFor="birthyear">Geburtsjahr: </label>
-        <input
-          id="birthyear"
-          type="number"
-          min="1930"
-          max="2020"
-          value={birthYear}
-          onChange={(e) => setBirthYear(e.target.value === "" ? "" : Number(e.target.value))}
-          onBlur={saveProfile}
-        />
-        <span className="status">{status}</span>
-      </div>
-      <main className="grid">
-        <SessionForm
-          onCreated={(s) => {
-            setSelected(s);
-            load();
-          }}
-        />
-        <PlanCard session={selected} plan={plan} ampel={ampel} />
+
+      <main className="appmain">
+        {activeTab === "plan" ? (
+          <>
+            <DayScroller selected={selectedDate} onSelect={setSelectedDate} sessions={sessions} />
+            <DaySummary date={selectedDate} sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} onSelectSession={showSession} />
+            <div className="grid">
+              <SessionForm
+                onCreated={(s) => {
+                  setSelected(s);
+                  setSelectedDate(s.session_date);
+                  load();
+                }}
+              />
+              <div id="plancard">
+                <PlanCard session={selected} plan={plan} ampel={ampel} />
+              </div>
+            </div>
+            <RaceDayWizard sessions={sessions} weightKg={weightKg} />
+          </>
+        ) : null}
+        {activeTab === "trends" ? (
+          <>
+            <WeekView sessions={sessions} weightKg={weightKg} />
+            <SessionList sessions={sessions} onSelect={showSession} onChanged={load} />
+          </>
+        ) : null}
+        {activeTab === "more" ? (
+          <div className="card">
+            <h2>Profil</h2>
+            <label htmlFor="weight">Körpergewicht (kg)</label>
+            <input
+              id="weight"
+              type="number"
+              min="30"
+              max="150"
+              inputMode="numeric"
+              value={weightKg}
+              onChange={(e) => setWeightKg(Number(e.target.value))}
+            />
+            <label htmlFor="birthyear">Geburtsjahr – aktiviert den Jugend-Modus (U15-U19)</label>
+            <input
+              id="birthyear"
+              type="number"
+              min="1930"
+              max="2020"
+              inputMode="numeric"
+              value={birthYear}
+              onChange={(e) => setBirthYear(e.target.value === "" ? "" : Number(e.target.value))}
+            />
+            <button type="button" onClick={saveProfile}>
+              Speichern
+            </button>
+            <span className="status">{status}</span>
+            <h3>Daten</h3>
+            <div className="headeractions">
+              <button type="button" className="link" onClick={exportCsv}>
+                Export (CSV)
+              </button>
+              <button type="button" className="link" onClick={signOut}>
+                Abmelden
+              </button>
+            </div>
+          </div>
+        ) : null}
       </main>
-      <QuickLog onLogged={load} />
-      <RaceDayWizard sessions={sessions} weightKg={weightKg} />
-      <WeekView sessions={sessions} weightKg={weightKg} />
-      <SessionList sessions={sessions} onSelect={setSelected} onChanged={load} />
+
+      {logSheet ? (
+        <>
+          <div className="sheet-backdrop" onClick={() => setLogSheet(false)} />
+          <div className="sheet">
+            <QuickLog onLogged={load} onClose={() => setLogSheet(false)} logDate={selectedDate} />
+          </div>
+        </>
+      ) : null}
+
+      <BottomNav active={activeTab} onTab={setActiveTab} onFab={() => setLogSheet(true)} />
     </div>
   );
 }

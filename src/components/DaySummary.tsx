@@ -1,15 +1,9 @@
+import { useState } from "react";
 import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, isYouthAthlete, restOfDayPhase } from "../lib/fueling";
-import { localIso } from "../lib/date";
+import { hhmmFromIso, localIso } from "../lib/date";
 import CarbAmpel from "./CarbAmpel";
 import Tip from "./Tip";
 import type { CarbAmpelPhase, MealLog, MealPhase, TrainingSession } from "../types";
-
-const phaseColor: Record<MealPhase, string> = {
-  pre: "tl-pre",
-  during: "tl-during",
-  post: "tl-post",
-  snack: "tl-snack"
-};
 
 const phaseText: Record<MealPhase, string> = {
   pre: "Vor der Einheit",
@@ -17,6 +11,8 @@ const phaseText: Record<MealPhase, string> = {
   post: "Danach",
   snack: "Snack"
 };
+
+const intensityText = (i: string) => (i === "high" ? "Hoch" : i === "moderate" ? "Mittel" : "Leicht");
 
 function Bar({ value, max, label, unit, explain }: { value: number; max: number; label: string; unit: string; explain: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
@@ -37,20 +33,49 @@ function Bar({ value, max, label, unit, explain }: { value: number; max: number;
   );
 }
 
+type FeedItem =
+  | { kind: "meal"; time: string; log: MealLog }
+  | { kind: "session"; time: string; session: TrainingSession };
+
+function SessionDrawer({ session, weightKg, onOpenPlan }: { session: TrainingSession; weightKg: number; onOpenPlan: () => void }) {
+  const plan = calculateFuelingPlan({
+    durationMin: session.duration_min,
+    intensity: session.intensity,
+    heat: session.heat,
+    bodyWeightKg: weightKg
+  });
+  return (
+    <div className="drawer">
+      <div className="drawer-facts">
+        <span className="drawer-chip">{plan.carbsPerHour} g KH/h während</span>
+        <span className="drawer-chip">{plan.fluidPerHour} ml/h trinken</span>
+        <span className="drawer-chip">{plan.postCarbsG} g KH + {plan.postProteinG} g Protein danach</span>
+      </div>
+      <button type="button" onClick={onOpenPlan}>Zum vollen Plan</button>
+    </div>
+  );
+}
+
 export default function DaySummary({
+  date,
   sessions,
   weightKg,
   mealLogs,
-  birthYear = ""
+  birthYear = "",
+  onSelectSession
 }: {
+  date: string;
   sessions: TrainingSession[];
   weightKg: number;
   mealLogs: MealLog[];
   birthYear?: number | "";
+  onSelectSession: (s: TrainingSession) => void;
 }) {
-  const today = localIso();
-  const todays = sessions.filter((s) => s.session_date === today);
-  const logsToday = mealLogs.filter((l) => l.log_date === today);
+  const [openSession, setOpenSession] = useState<string | null>(null);
+
+  const isToday = date === localIso();
+  const todays = sessions.filter((s) => s.session_date === date);
+  const logsToday = mealLogs.filter((l) => l.log_date === date);
 
   const minutes = todays.reduce((sum, s) => sum + s.duration_min, 0);
   const longestSession = todays.length > 0 ? todays.reduce((a, b) => (b.duration_min > a.duration_min ? b : a)) : null;
@@ -100,6 +125,17 @@ export default function DaySummary({
   const fluid = plans.reduce((sum, p) => sum + p.totalFluidMl, 0);
   const liters = (fluid / 1000).toFixed(1).replace(".", ",");
 
+  // Timeline-Feed (DUO-32): Mahlzeiten und Einheiten chronologisch gemischt,
+  // Tiles nach Fueling-Phase farbcodiert (Carb Coding statt Mahlzeitentyp).
+  const feed: FeedItem[] = [
+    ...logsToday.map((l) => ({ kind: "meal" as const, time: hhmmFromIso(l.created_at), log: l })),
+    ...todays.map((s) => ({ kind: "session" as const, time: s.session_start || "", session: s }))
+  ].sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+
+  const dateLabel = isToday
+    ? "Heute"
+    : new Date(date + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
+
   const glycogenTip = youth
     ? "Füllstand der Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Jugend-Ziel – im Wachstum höher angesetzt (Ruhetag 5, Belastungstag 7, Wettkampftag 8 g/kg) und nie stark gedrosselt (RED-S-Schutz)."
     : "Füllstand deiner Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Ziel – periodisiert nach Trainingsbelastung (Ruhetag 4, Belastungstag 6, Wettkampftag 8 g/kg).";
@@ -114,7 +150,7 @@ export default function DaySummary({
 
   let nextStep: string;
   if (todays.length === 0) {
-    nextStep = "Erfasse dein heutiges Training – danach erscheint dein Fueling-Plan.";
+    nextStep = "Erfasse dein Training – danach erscheint dein Fueling-Plan.";
   } else if (loggedCarbs === 0) {
     const first = phases.find((p) => p.key === "pre");
     nextStep = first
@@ -129,11 +165,11 @@ export default function DaySummary({
   return (
     <div className="card summary">
       <h2>
-        Heute <span className={"badge badge-" + dayType}>{dayTypeLabel(dayType)}</span>
+        {dateLabel} <span className={"badge badge-" + dayType}>{dayTypeLabel(dayType)}</span>
         {youth ? <span className="badge badge-youth">Jugend U15-U19</span> : null}
       </h2>
       {todays.length === 0 ? (
-        <p className="muted">Noch keine Einheiten heute – Zeit fuer Training.</p>
+        <p className="muted">Keine Einheiten an diesem Tag.</p>
       ) : (
         <p className="muted">
           {todays.length} {todays.length === 1 ? "Einheit" : "Einheiten"} · {minutes} min · {plannedCarbs} g KH geplant · {liters} l Fluessigkeit
@@ -174,17 +210,46 @@ export default function DaySummary({
 
       <div className="timeline">
         <span className="timeline-title">
-          Mahlzeiten heute <Tip text="Farbliche Zuordnung: Blau = vor der Einheit, Gelb = während, Grün = Danach (Regeneration), Grau = Snack/sonstige – nach dem Fuelin-Prinzip farbcodierter Mahlzeiten." />
+          Timeline <Tip text="Farbliche Zuordnung nach Fueling-Phase: Blau = vor der Einheit, Gelb = während, Grün = danach (Regeneration), Grau = Snack/sonstige – nach dem Fuelin-Prinzip farbcodierter Mahlzeiten. Zeiten zeigen, wann geloggt bzw. wann die Einheit geplant ist." />
         </span>
-        {logsToday.length === 0 ? (
-          <span className="muted timeline-empty">Noch nichts geloggt – ein Klick auf einen Favoriten genügt.</span>
+        {feed.length === 0 ? (
+          <span className="muted timeline-empty">Noch nichts an diesem Tag – tippe unten auf + zum Loggen.</span>
         ) : (
-          <div className="timeline-items">
-            {logsToday.map((l) => (
-              <span key={l.id} className={"tl " + phaseColor[l.phase]} title={phaseText[l.phase]}>
-                {l.name} · {Math.round(Number(l.carbs_g))} g
-              </span>
-            ))}
+          <div className="feed">
+            {feed.map((f, i) =>
+              f.kind === "meal" ? (
+                <div className="feedrow" key={"m" + i}>
+                  <span className="feedtime">{f.time}</span>
+                  <div className={"mealtile tile-" + f.log.phase}>
+                    <div className="tile-head">
+                      <span className="tile-name">{f.log.name}</span>
+                      <span className="tile-phase">{phaseText[f.log.phase]}</span>
+                    </div>
+                    <div className="tile-macros">
+                      <span><strong>{Math.round(Number(f.log.carbs_g))}</strong> g KH</span>
+                      <span><strong>{Math.round(Number(f.log.protein_g))}</strong> g P</span>
+                      <span><strong>{Math.round(Number(f.log.fat_g))}</strong> g F</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="feedrow" key={"s" + (f.session.id || i)}>
+                  <span className="feedtime">{f.time}</span>
+                  <div className="sessiontile">
+                    <button
+                      type="button"
+                      className="tile-toggle"
+                      onClick={() => setOpenSession(openSession === f.session.id ? null : f.session.id ?? null)}
+                    >
+                      <span className="tile-name">{f.session.sport} · {f.session.duration_min} min · {intensityText(f.session.intensity)}</span>
+                    </button>
+                    {openSession === f.session.id ? (
+                      <SessionDrawer session={f.session} weightKg={weightKg} onOpenPlan={() => onSelectSession(f.session)} />
+                    ) : null}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         )}
       </div>
