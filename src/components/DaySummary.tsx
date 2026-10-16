@@ -137,7 +137,7 @@ export default function DaySummary({
           unit="g"
           value={loggedCarbs}
           max={dailyTargetG}
-          explain="Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g. Das Ziel wechselt täglich mit der Belastung (Carb Coding)."
+          explain={"Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g. Das Ziel wechselt täglich mit der Belastung (Carb Coding)."}
         />
         <Bar
           label="Protein"
