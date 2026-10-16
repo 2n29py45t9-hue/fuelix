@@ -24,7 +24,7 @@ function Bar({ value, max, label, unit, explain }: { value: number; max: number;
     <div className="macrobar">
       <div className="macrobar-head">
         <span className="macrobar-label">
-          {label} <Tip text={explain} label={undefined} />
+          {label} <Tip text={explain} />
         </span>
         <span className="macrobar-value">
           <strong>{Math.round(value)}</strong> / {Math.round(max)} {unit}
@@ -89,7 +89,6 @@ export default function DaySummary({
   const fluid = plans.reduce((sum, p) => sum + p.totalFluidMl, 0);
   const liters = (fluid / 1000).toFixed(1).replace(".", ",");
 
-  // Naechster Schritt (3-Sekunden-Regel): klare Anweisung statt Zahlenfriedhof
   let nextStep: string;
   if (todays.length === 0) {
     nextStep = "Erfasse dein heutiges Training – danach erscheint dein Fueling-Plan.";
@@ -107,7 +106,7 @@ export default function DaySummary({
   return (
     <div className="card summary">
       <h2>
-        Heute <span className="badge badge-{" + dayType + "}">{dayTypeLabel(dayType)}</span>
+        Heute <span className={"badge badge-" + dayType}>{dayTypeLabel(dayType)}</span>
       </h2>
       {todays.length === 0 ? (
         <p className="muted">Noch keine Einheiten heute – Zeit fuer Training.</p>
