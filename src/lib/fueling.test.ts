@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { intensityFromStrava, mapActivityToSession, sportFromStrava, type StravaActivity } from "./stravaMap";
 import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, restOfDayPhase, youthDailyCarbsPerKg } from "./fueling";
 
 const input = (durationMin: number, intensity: "low" | "moderate" | "high", heat: "normal" | "hot", bodyWeightKg: number) =>
@@ -196,5 +197,47 @@ describe("Energieziel-Engine (DUO-33)", () => {
     expect(ok.loggedKcal).toBe(2400);
     expect(ok.pct).toBe(80);
     expect(ok.level).toBe("ok");
+  });
+});
+
+const activity = (over: Partial<StravaActivity>): StravaActivity => ({
+  id: 123456,
+  name: "Morning Ride",
+  sport_type: "Ride",
+  start_date: "2026-10-16T13:45:00Z",
+  moving_time: 5400,
+  distance: 45000,
+  ...over
+});
+
+describe("Strava-Mapping (DUO-23)", () => {
+  it("Ride wird zu Radsport, Dauer in Minuten, km im Namen", () => {
+    const s = mapActivityToSession(activity({}));
+    expect(s.sport).toBe("Radsport");
+    expect(s.duration_min).toBe(90);
+    expect(s.strava_id).toBe(123456);
+    expect(s.notes).toContain("45 km");
+    expect(s.heat).toBe("normal");
+  });
+
+  it("Lauf-, Schwimm- und Kraft-Typen werden zugeordnet, Unbekannte fallen auf den Rohwert", () => {
+    expect(sportFromStrava(activity({ sport_type: "TrailRun" }))).toBe("Laufen");
+    expect(sportFromStrava(activity({ sport_type: "Swim" }))).toBe("Schwimmen");
+    expect(sportFromStrava(activity({ sport_type: "WeightTraining" }))).toBe("Krafttraining");
+    expect(sportFromStrava(activity({ sport_type: "Zumba" }))).toBe("Zumba");
+    expect(sportFromStrava(activity({ sport_type: undefined }))).toBe("Radsport");
+  });
+
+  it("Intensitaet aus Herzfrequenz: unter 120 low, bis 150 moderate, darueber high, ohne HF moderate", () => {
+    expect(intensityFromStrava(110)).toBe("low");
+    expect(intensityFromStrava(140)).toBe("moderate");
+    expect(intensityFromStrava(165)).toBe("high");
+    expect(intensityFromStrava(undefined)).toBe("moderate");
+  });
+
+  it("Datum und Startzeit werden lokal gerendert", () => {
+    const s = mapActivityToSession(activity({}));
+    expect(s.session_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(s.session_start).toMatch(/^\d{2}:\d{2}$/);
   });
 });

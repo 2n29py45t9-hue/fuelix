@@ -15,6 +15,8 @@ import WeekView from "./components/WeekView";
 import QuickLog from "./components/QuickLog";
 import RaceDayWizard from "./components/RaceDayWizard";
 import BottomNav from "./components/BottomNav";
+import StravaSync from "./components/StravaSync";
+import { consumeHandoff } from "./lib/strava";
 
 type Tab = "plan" | "trends" | "more";
 
@@ -35,6 +37,12 @@ export default function App() {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => setAuthSession(newSession));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Strava-OAuth-Uebergabe (DUO-23): Tokens aus dem Callback mit eigener Session speichern.
+  useEffect(() => {
+    if (!authSession) return;
+    consumeHandoff().catch(() => {});
+  }, [authSession]);
 
   const load = useCallback(async () => {
     const profileRes = await supabase.from("profile").select("*").limit(1);
@@ -147,42 +155,45 @@ export default function App() {
           </>
         ) : null}
         {activeTab === "more" ? (
-          <div className="card">
-            <h2>Profil</h2>
-            <label htmlFor="weight">Körpergewicht (kg)</label>
-            <input
-              id="weight"
-              type="number"
-              min="30"
-              max="150"
-              inputMode="numeric"
-              value={weightKg}
-              onChange={(e) => setWeightKg(Number(e.target.value))}
-            />
-            <label htmlFor="birthyear">Geburtsjahr – aktiviert den Jugend-Modus (U15-U19)</label>
-            <input
-              id="birthyear"
-              type="number"
-              min="1930"
-              max="2020"
-              inputMode="numeric"
-              value={birthYear}
-              onChange={(e) => setBirthYear(e.target.value === "" ? "" : Number(e.target.value))}
-            />
-            <button type="button" onClick={saveProfile}>
-              Speichern
-            </button>
-            <span className="status">{status}</span>
-            <h3>Daten</h3>
-            <div className="headeractions">
-              <button type="button" className="link" onClick={exportCsv}>
-                Export (CSV)
+          <>
+            <div className="card">
+              <h2>Profil</h2>
+              <label htmlFor="weight">Körpergewicht (kg)</label>
+              <input
+                id="weight"
+                type="number"
+                min="30"
+                max="150"
+                inputMode="numeric"
+                value={weightKg}
+                onChange={(e) => setWeightKg(Number(e.target.value))}
+              />
+              <label htmlFor="birthyear">Geburtsjahr – aktiviert den Jugend-Modus (U15-U19)</label>
+              <input
+                id="birthyear"
+                type="number"
+                min="1930"
+                max="2020"
+                inputMode="numeric"
+                value={birthYear}
+                onChange={(e) => setBirthYear(e.target.value === "" ? "" : Number(e.target.value))}
+              />
+              <button type="button" onClick={saveProfile}>
+                Speichern
               </button>
-              <button type="button" className="link" onClick={signOut}>
-                Abmelden
-              </button>
+              <span className="status">{status}</span>
+              <h3>Daten</h3>
+              <div className="headeractions">
+                <button type="button" className="link" onClick={exportCsv}>
+                  Export (CSV)
+                </button>
+                <button type="button" className="link" onClick={signOut}>
+                  Abmelden
+                </button>
+              </div>
             </div>
-          </div>
+            <StravaSync onSynced={load} />
+          </>
         ) : null}
       </main>
 

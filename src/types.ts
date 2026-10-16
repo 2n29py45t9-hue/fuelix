@@ -14,6 +14,7 @@ export interface TrainingSession {
   intensity: Intensity;
   heat: Heat;
   notes?: string | null;
+  strava_id?: number | null;
 }
 
 export interface FuelingPlan {
