@@ -274,7 +274,7 @@ export default function DaySummary({
         <div className="realloc">
           <span className="realloc-title">
             Nächster Anlass: {nextSlot.label} ({nextSlot.time})
-            <Tip text={nextSlot.explanation !== "" ? nextSlot.explanation : "Ziel aus deinem Tagesablauf-Raster, periodisiert gegen dein Training. Jeder Log rechnet die restlichen Anlässe neu." />
+            <Tip text={nextSlot.explanation !== "" ? nextSlot.explanation : "Ziel aus deinem Tagesablauf-Raster, periodisiert gegen dein Training. Jeder Log rechnet die restlichen Anlässe neu."} />
           </span>
           <span className="realloc-value">
             ≈ {nextSlot.carbsG} g KH · {nextSlot.proteinG} g Protein{nextChanged ? " (neu berechnet)" : ""}

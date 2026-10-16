@@ -311,10 +311,10 @@ export default function QuickLog({
             <button className="fav" onClick={() => logSessionFuel("Gel", 25)} disabled={busy === "sfuel-Gel"}>
               + Gel (25 g)
             </button>
-            <button className="fav" onClick={() => logSessionFuel("Iso-Getränk", 30)} disabled={busy === "sfuel-Iso-Getränk">
+            <button className="fav" onClick={() => logSessionFuel("Iso-Getränk", 30)} disabled={busy === "sfuel-Iso-Getränk"}>
               + Iso (30 g)
             </button>
-            <button className="fav" onClick={() => logSessionFuel("Riegel", 40)} disabled={busy === "sfuel-Riegel">
+            <button className="fav" onClick={() => logSessionFuel("Riegel", 40)} disabled={busy === "sfuel-Riegel"}>
               + Riegel (40 g)
             </button>
           </div>
