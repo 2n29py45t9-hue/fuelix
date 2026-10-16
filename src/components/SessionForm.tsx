@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
+import { localIso } from "../lib/date";
 import type { TrainingSession } from "../types";
 
 export default function SessionForm({ onCreated }: { onCreated: (s: TrainingSession) => void }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const [sessionDate, setSessionDate] = useState(today);
+  const [sessionDate, setSessionDate] = useState(localIso());
   const [sport, setSport] = useState("Radsport");
   const [durationMin, setDurationMin] = useState(90);
   const [intensity, setIntensity] = useState("moderate");

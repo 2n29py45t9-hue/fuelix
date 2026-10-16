@@ -1,6 +1,13 @@
 # Fuelix 🚴
 
-Dein eigenes Hexis.live: Fueling-Plan (Kohlenhydrate & Flüssigkeit) pro Trainingseinheit.
+Dein eigenes Hexis.live: Fueling-Plan (Kohlenhydrate & Flüssigkeit) pro Trainingseinheit – Single-User, nur für dich.
+
+## Features
+
+- Fueling-Plan pro Einheit (KH, Flüssigkeit, Natrium – vorher/während/danach)
+- Tages-Zusammenfassung und Wochenansicht mit periodisierten Tages-KH-Zielen
+- CSV-Export der Einheiten inklusive berechneter Pläne
+- Login (Supabase Auth), Datenbank per RLS nur für eingeloggte Nutzer
 
 ## Setup
 
@@ -10,7 +17,7 @@ Dein eigenes Hexis.live: Fueling-Plan (Kohlenhydrate & Flüssigkeit) pro Trainin
 
 ## Auth
 
-Der erste Start zeigt einen Login-Screen: einmalig registrieren, Bestätigungsmail klicken, einloggen. Die Datenbank erlaubt Zugriff nur noch eingeloggten Nutzern (RLS). Nach dem ersten Account in den Supabase-Auth-Einstellungen die Registrierung deaktivieren.
+Der erste Start zeigt einen Login-Screen: einmalig registrieren, Bestätigungsmail klicken, einloggen. Danach in den Supabase-Auth-Einstellungen die Registrierung deaktivieren.
 
 ## Tests
 
@@ -29,6 +36,4 @@ Repo importieren, Umgebungsvariablen `VITE_SUPABASE_URL` und `VITE_SUPABASE_KEY`
 ## Roadmap
 
 - Wearable-Integration (Garmin, WHOOP, Apple Health)
-- Wochen-Periodisierung (fuel for the work required)
-- Coach-Modus für mehrere Athleten
-- Datenexport (CSV)
+- (später) Coach-Modus für mehrere Athleten

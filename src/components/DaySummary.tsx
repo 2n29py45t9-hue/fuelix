@@ -1,4 +1,5 @@
 import { calculateFuelingPlan } from "../lib/fueling";
+import { localIso } from "../lib/date";
 import type { TrainingSession } from "../types";
 
 export default function DaySummary({
@@ -8,7 +9,7 @@ export default function DaySummary({
   sessions: TrainingSession[];
   weightKg: number;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localIso();
   const todays = sessions.filter((s) => s.session_date === today);
 
   if (todays.length === 0) {

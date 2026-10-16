@@ -1,8 +1,10 @@
 * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
 body { margin: 0; background: #0f172a; color: #e2e8f0; }
 .app { max-width: 960px; margin: 0 auto; padding: 24px; }
-header h1 { margin: 0; font-size: 28px; }
+header h1 { margin: 0; font-size: 28px; display: inline-block; }
 header p { margin: 4px 0 20px; color: #94a3b8; }
+.headeractions { display: flex; gap: 16px; margin-bottom: 12px; }
+.headeractions button { margin-top: 0; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
 .card { background: #1e293b; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
@@ -13,6 +15,7 @@ button { margin-top: 12px; padding: 8px 14px; border: 0; border-radius: 8px; bac
 button:hover { filter: brightness(1.1); }
 button.danger { background: #7f1d1d; color: #fecaca; margin-left: 6px; }
 button.link { background: transparent; color: #94a3b8; padding: 4px 0; font-weight: 400; }
+button.link:hover { color: #e2e8f0; }
 .error { color: #f87171; }
 .muted { color: #94a3b8; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -27,3 +30,11 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .auth { max-width: 380px; margin: 60px auto; }
 .auth h1 { font-size: 26px; }
 .summary p { margin: 4px 0; }
+.weeknav { display: flex; gap: 16px; margin-bottom: 8px; }
+.weeknav button { margin-top: 0; }
+.bars { display: flex; align-items: flex-end; gap: 8px; height: 140px; margin-top: 10px; }
+.barcol { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.bar { width: 70%; background: #16a34a; border-radius: 6px 6px 0 0; display: flex; align-items: flex-start; justify-content: center; color: #bbf7d0; font-size: 12px; font-weight: 700; padding-top: 4px; min-height: 18px; }
+.barcol.today .bar { background: #22c55e; }
+.barlabel { font-size: 12px; color: #94a3b8; margin-top: 6px; }
+.barmin { font-size: 11px; color: #64748b; min-height: 14px; }

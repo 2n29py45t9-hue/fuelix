@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { calculateFuelingPlan } from "./lib/fueling";
+import { buildSessionsCsv, downloadCsv } from "./lib/csv";
 import type { FuelingPlan, TrainingSession } from "./types";
 import Auth from "./components/Auth";
 import SessionForm from "./components/SessionForm";
 import PlanCard from "./components/PlanCard";
 import SessionList from "./components/SessionList";
 import DaySummary from "./components/DaySummary";
+import WeekView from "./components/WeekView";
 
 export default function App() {
   const [authSession, setAuthSession] = useState<SupabaseSession | null>(null);
@@ -24,7 +26,7 @@ export default function App() {
 
   const load = useCallback(async () => {
     const profileRes = await supabase.from("profile").select("*").limit(1);
-    const sessionsRes = await supabase.from("sessions").select("*").order("session_date", { ascending: false }).limit(30);
+    const sessionsRes = await supabase.from("sessions").select("*").order("session_date", { ascending: false }).limit(100);
     if (profileRes.data && profileRes.data.length > 0) {
       setWeightKg(Number(profileRes.data[0].body_weight_kg));
     }
@@ -37,6 +39,10 @@ export default function App() {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+  };
+
+  const exportCsv = () => {
+    downloadCsv(buildSessionsCsv(sessions, weightKg), "fuelix-sessions.csv");
   };
 
   const saveWeight = async () => {
@@ -68,9 +74,14 @@ export default function App() {
       <header>
         <h1>Fuelix 🚴</h1>
         <p>Fueling-Plan pro Einheit – dein eigenes Hexis.live</p>
-        <button className="link" onClick={signOut}>
-          Abmelden
-        </button>
+        <div className="headeractions">
+          <button className="link" onClick={exportCsv}>
+            Export (CSV)
+          </button>
+          <button className="link" onClick={signOut}>
+            Abmelden
+          </button>
+        </div>
       </header>
       <DaySummary sessions={sessions} weightKg={weightKg} />
       <div className="weight">
@@ -95,6 +106,7 @@ export default function App() {
         />
         <PlanCard session={selected} plan={plan} />
       </main>
+      <WeekView sessions={sessions} weightKg={weightKg} />
       <SessionList sessions={sessions} onSelect={setSelected} onChanged={load} />
     </div>
   );
