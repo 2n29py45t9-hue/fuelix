@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
-import { buildCarbAmpel, calculateFuelingPlan } from "./lib/fueling";
+import { buildCarbAmpel, calculateFuelingPlan, inferLogPhase } from "./lib/fueling";
 import { buildSessionsCsv, downloadCsv } from "./lib/csv";
-import { localIso } from "./lib/date";
-import type { FuelingPlan, MealLog, TrainingSession } from "./types";
+import { hhmmNow, localIso } from "./lib/date";
+import type { FuelingPlan, MealLog, MealSlot, TrainingSession } from "./types";
 import Auth from "./components/Auth";
 import SessionForm from "./components/SessionForm";
 import PlanCard from "./components/PlanCard";
@@ -15,16 +15,18 @@ import WeekView from "./components/WeekView";
 import QuickLog from "./components/QuickLog";
 import RaceDayWizard from "./components/RaceDayWizard";
 import BottomNav from "./components/BottomNav";
+import MealCalendar from "./components/MealCalendar";
 import StravaSync from "./components/StravaSync";
 import Onboarding from "./components/Onboarding";
 import { consumeHandoff } from "./lib/strava";
 
-type Tab = "plan" | "trends" | "more";
+type Tab = "plan" | "kalender" | "trends" | "more";
 
 export default function App() {
   const [authSession, setAuthSession] = useState<SupabaseSession | null>(null);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [mealLogs, setMealLogs] = useState<MealLog[]>([]);
+  const [mealSchedule, setMealSchedule] = useState<MealSlot[]>([]);
   const [weightKg, setWeightKg] = useState(70);
   const [birthYear, setBirthYear] = useState<number | "">("");
   const [mainSport, setMainSport] = useState("Radsport");
@@ -51,6 +53,7 @@ export default function App() {
     const profileRes = await supabase.from("profile").select("*").limit(1);
     const sessionsRes = await supabase.from("sessions").select("*").order("session_date", { ascending: false }).limit(100);
     const logsRes = await supabase.from("meal_logs").select("*").order("created_at", { ascending: false }).limit(200);
+    const scheduleRes = await supabase.from("meal_schedule").select("*").order("weekday", { ascending: true }).order("time", { ascending: true });
     if (profileRes.data && profileRes.data.length > 0) {
       setWeightKg(Number(profileRes.data[0].body_weight_kg));
       const by = profileRes.data[0].birth_year;
@@ -63,6 +66,7 @@ export default function App() {
     }
     if (sessionsRes.data) setSessions(sessionsRes.data as TrainingSession[]);
     if (logsRes.data) setMealLogs(logsRes.data as MealLog[]);
+    if (scheduleRes.data) setMealSchedule(scheduleRes.data as MealSlot[]);
   }, []);
 
   useEffect(() => {
@@ -119,13 +123,31 @@ export default function App() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // DUO-35: Anlass- und Session-Fuel-Kontext fuer QuickLog.
+  const sessionsToday = sessions.filter((s) => s.session_date === selectedDate);
+  const quickPhase = inferLogPhase(
+    sessionsToday.map((s) => ({ start: s.session_start ?? null, durationMin: s.duration_min, intensity: s.intensity, heat: s.heat })),
+    hhmmNow()
+  );
+  const sessionFuelG = sessionsToday.reduce(
+    (sum, s) =>
+      sum +
+      calculateFuelingPlan({
+        durationMin: s.duration_min,
+        intensity: s.intensity,
+        heat: s.heat,
+        bodyWeightKg: weightKg
+      }).totalCarbsG,
+    0
+  );
+
   return (
     <div className="app">
       <header className="appheader">
         <div className="appheader-inner">
           <div>
             <h1>Fuelix</h1>
-            <p className="appheader-sub">Fueling-Plan pro Einheit</p>
+            <p className="appheader-sub">Fueling pro Einheit &amp; Mahlzeit</p>
           </div>
           <button type="button" className="headeravatar" onClick={() => setActiveTab("more")} aria-label="Profil und Einstellungen">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -140,7 +162,7 @@ export default function App() {
         {activeTab === "plan" ? (
           <>
             <DayScroller selected={selectedDate} onSelect={setSelectedDate} sessions={sessions} />
-            <DaySummary date={selectedDate} sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} onSelectSession={showSession} />
+            <DaySummary date={selectedDate} sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} mealSchedule={mealSchedule} onSelectSession={showSession} />
             <div className="grid">
               <SessionForm
                 defaultSport={mainSport}
@@ -156,6 +178,20 @@ export default function App() {
             </div>
             <RaceDayWizard sessions={sessions} weightKg={weightKg} />
           </>
+        ) : null}
+        {activeTab === "kalender" ? (
+          <MealCalendar
+            selectedDate={selectedDate}
+            onSelectDate={(iso) => {
+              setSelectedDate(iso);
+              setActiveTab("plan");
+            }}
+            sessions={sessions}
+            weightKg={weightKg}
+            birthYear={birthYear}
+            mealSchedule={mealSchedule}
+            onScheduleSaved={load}
+          />
         ) : null}
         {activeTab === "trends" ? (
           <>
@@ -212,7 +248,14 @@ export default function App() {
         <>
           <div className="sheet-backdrop" onClick={() => setLogSheet(false)} />
           <div className="sheet">
-            <QuickLog onLogged={load} onClose={() => setLogSheet(false)} logDate={selectedDate} />
+            <QuickLog
+              onLogged={load}
+              onClose={() => setLogSheet(false)}
+              logDate={selectedDate}
+              defaultPhase={quickPhase}
+              recentLogs={mealLogs.slice(0, 30)}
+              sessionFuelG={sessionFuelG}
+            />
           </div>
         </>
       ) : null}

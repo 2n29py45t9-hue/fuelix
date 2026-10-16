@@ -1,4 +1,5 @@
-import type { CarbAmpelPhase, DayType, FuelingPlan, Heat, Intensity, RaceDayPhase } from "../types";
+import { minutesFromHHMM } from "./date";
+import type { AmpelColor, CarbAmpelPhase, DayType, FuelingPlan, Heat, Intensity, MealPhase, RaceDayPhase } from "../types";
 
 export interface FuelingInput {
   durationMin: number;
@@ -420,4 +421,248 @@ export function energyBalanceFor(
   const watchAt = isYouth ? 65 : 55;
   const level = pct >= okAt ? "ok" : pct >= watchAt ? "watch" : "risk";
   return { loggedKcal, targetKcal, pct, level };
+}
+
+/*
+ * Mahlzeiten-Periodisierung (DUO-35) - Carb Coding pro Anlass:
+ * Deep-Research-Grundlage (vgl. Quellenreport im Projektdokument):
+ * - Tagesziel aus dailyTargetsFor (fuel for the work required, Impey et al. 2018)
+ * - Session-Fuel (waehrend) bekommt ein eigenes Budget und wird separat geloggt
+ *   (60-90 g/h je nach Dauer/Intensitaet, GSSI/ACSM-Baender)
+ * - Letzte Mahlzeit vor der Einheit: 1,0-1,5 g/kg im Fenster bis 4 h vorher
+ * - Erste Mahlzeit nach der Einheit: 1,0-1,2 g/kg + 20-30 g Protein (Recovery)
+ * - Restbudget verteilt sich aufs individuelle Raster: Hauptmahlzeit 1, Snack 0,55
+ * - Protein: ~0,4 g/kg je Hauptmahlzeit (Schoenfeld/Aragon 2018), Jugend 1,7 g/kg/Tag
+ * - Vorabend-Anhebung, wenn am Folgetag eine harte Einheit liegt (72-h-Fenster,
+ *   so arbeitet auch Hexis: gestern/heute/morgen)
+ * - Farbe: gruen = KH-Betonung wichtig, gelb = moderat, rot = klar unter dem
+ *   Tagesdurchschnitt (z. B. Snacks am Ruhetag)
+ */
+export interface MealSlotInput {
+  time: string;
+  label: string;
+  primary: boolean;
+}
+
+export interface MealPlanSession {
+  start: string | null;
+  durationMin: number;
+  intensity: Intensity;
+  heat: Heat;
+}
+
+export interface MealSlotPlan {
+  time: string;
+  label: string;
+  primary: boolean;
+  carbsG: number;
+  proteinG: number;
+  color: AmpelColor;
+  relation: "pre" | "post" | "free";
+  explanation: string;
+}
+
+export interface MealDayPlan {
+  dayType: DayType;
+  totalCarbsG: number;
+  totalProteinG: number;
+  sessionFuelG: number;
+  slots: MealSlotPlan[];
+}
+
+export function mealPlanFor(input: {
+  slots: MealSlotInput[];
+  sessions: MealPlanSession[];
+  weightKg: number;
+  dayType: DayType;
+  isYouth: boolean;
+  nextDayKey?: boolean;
+}): MealDayPlan {
+  const targets = dailyTargetsFor(input.dayType, input.weightKg, input.isYouth);
+  const kg = input.weightKg;
+
+  const slotTimes = input.slots
+    .map((s) => ({ slot: s, min: minutesFromHHMM(s.time) }))
+    .filter((s) => s.min >= 0)
+    .sort((a, b) => a.min - b.min);
+
+  // Session-Fuel waehrend der Einheit(en): eigenes Budget, separat geloggt.
+  const sessionFuelG = input.sessions.reduce((sum, s) => {
+    const p = calculateFuelingPlan({ durationMin: s.durationMin, intensity: s.intensity, heat: s.heat, bodyWeightKg: kg });
+    return sum + p.totalCarbsG;
+  }, 0);
+
+  const result: MealSlotPlan[] = slotTimes.map((s) => ({
+    time: s.slot.time,
+    label: s.slot.label,
+    primary: s.slot.primary,
+    carbsG: 0,
+    proteinG: 0,
+    color: "yellow",
+    relation: "free",
+    explanation: ""
+  }));
+
+  // 1) Trainingsnaehe: letzte Mahlzeit vor der Einheit, erste danach.
+  for (const sess of input.sessions) {
+    if (!sess.start) continue;
+    const startMin = minutesFromHHMM(sess.start);
+    if (startMin < 0) continue;
+    const plan = calculateFuelingPlan({ durationMin: sess.durationMin, intensity: sess.intensity, heat: sess.heat, bodyWeightKg: kg });
+
+    let preIdx = -1;
+    slotTimes.forEach((s, i) => {
+      if (s.min >= startMin - 240 && s.min < startMin) preIdx = i;
+    });
+    if (preIdx >= 0) {
+      const perKg = sess.durationMin >= 90 || sess.intensity === "high" ? 1.5 : 1.0;
+      result[preIdx].carbsG = Math.max(result[preIdx].carbsG, Math.round(kg * perKg));
+      result[preIdx].relation = "pre";
+      result[preIdx].color = "green";
+      result[preIdx].explanation =
+        "Trainingsnah (vor der Einheit): ca. " + perKg + " g KH pro kg (" + Math.round(kg * perKg) +
+        " g) bis 4 h vor dem Start laden die Glykogenspeicher – das Carb Coding setzt deine größte Portion dorthin.";
+    }
+
+    const endMin = startMin + sess.durationMin;
+    let postIdx = -1;
+    slotTimes.forEach((s, i) => {
+      if (postIdx < 0 && result[i].relation === "free" && s.min >= endMin && s.min <= endMin + 240) postIdx = i;
+    });
+    if (postIdx >= 0) {
+      result[postIdx].carbsG = Math.max(result[postIdx].carbsG, plan.postCarbsG);
+      result[postIdx].proteinG = Math.max(result[postIdx].proteinG, plan.postProteinG);
+      result[postIdx].relation = "post";
+      result[postIdx].color = "green";
+      result[postIdx].explanation =
+        "Regenerationsfenster (nach der Einheit): ca. " + plan.postCarbsG + " g KH (1,0-1,2 g/kg) plus " +
+        plan.postProteinG + " g Protein starten die Erholung, solange die Speicher am aufnahmefähigsten sind.";
+    }
+  }
+
+  // 2) Restbudget auf freie Anlaesse verteilen (Hauptmahlzeit 1, Snack 0,55).
+  const fixed = result.filter((s) => s.relation !== "free").reduce((sum, s) => sum + s.carbsG, 0);
+  const restBudget = Math.max(0, targets.carbsG - sessionFuelG - fixed);
+  const freeIdx = result.map((s, i) => (s.relation === "free" ? i : -1)).filter((i) => i >= 0);
+  const weightSum = freeIdx.reduce((sum, i) => sum + (result[i].primary ? 1 : 0.55), 0);
+  const baseline = weightSum > 0 ? restBudget / weightSum : 0;
+  for (const i of freeIdx) {
+    result[i].carbsG = Math.round(baseline * (result[i].primary ? 1 : 0.55));
+  }
+
+  // 3) Protein je Anlass: ~0,4 g/kg Hauptmahlzeit, Snacks ~0,15 g/kg.
+  const proteinPerPrimary = input.isYouth ? 0.425 : 0.4;
+  for (const s of result) {
+    const base = s.primary ? Math.round(kg * proteinPerPrimary) : Math.round(kg * 0.15);
+    s.proteinG = Math.max(s.proteinG, base);
+  }
+
+  // 4) Vorabend-Anhebung vor Key-Session am Folgetag (72-h-Prinzip).
+  if (input.nextDayKey) {
+    for (let i = result.length - 1; i >= 0; i--) {
+      if (minutesFromHHMM(result[i].time) >= 17 * 60) {
+        result[i].carbsG = Math.round(result[i].carbsG * 1.4);
+        result[i].color = "green";
+        result[i].explanation =
+          "Morgen steht eine harte Einheit an: Der Vorabend füllt die Speicher vor – das ist die 72-Stunden-Logik (gestern gegessen, heute geplant, morgen vorbereitet).";
+        break;
+      }
+    }
+  }
+
+  // 5) Farben und Erklärungen der freien Anlässe, Casein-Hinweis für späte Snacks.
+  for (const s of result) {
+    if (s.relation === "free") {
+      const ratio = baseline > 0 ? s.carbsG / baseline : 1;
+      if (ratio >= 1.25) s.color = "green";
+      else if (ratio <= 0.75) s.color = "red";
+      else s.color = "yellow";
+      if (!s.explanation) {
+        s.explanation =
+          "Freier Anteil: " + s.carbsG + " g KH aus dem Tagesziel (" + targets.carbsG + " g" +
+          (sessionFuelG > 0 ? " abzüglich " + sessionFuelG + " g Session-Fuel" : "") + "). " +
+          (input.dayType === "rest"
+            ? "Ruhetag: moderate Menge, Fokus auf Protein und Gemüse – die Speicher müssen heute nicht voll sein."
+            : "Belastungstag: ausgewogen zusätzlich zu den trainingsnahen Anlässen.");
+      }
+    }
+    if (minutesFromHHMM(s.time) >= 21 * 60) {
+      s.proteinG = Math.max(s.proteinG, 25);
+      s.explanation += " Vor dem Schlafen: 20-40 g Casein (z. B. Quark) stützen die nächtliche Regeneration.";
+    }
+  }
+
+  return {
+    dayType: input.dayType,
+    totalCarbsG: targets.carbsG,
+    totalProteinG: targets.proteinG,
+    sessionFuelG,
+    slots: result
+  };
+}
+
+/*
+ * Reallocation (DUO-35, Hexis-Prinzip): Nach jedem Log werden die Ziele der
+ * noch ausstehenden Anlässe neu berechnet – gegessene KH verschieben das
+ * Restbudget, statt nur einen Balken zu füllen. Vergangene Anlässe bleiben
+ * unangetastet, die Zukunft passt sich an.
+ */
+export function reallocateMealPlan(plan: MealDayPlan, loggedCarbsG: number, nowTime: string): MealDayPlan {
+  const nowMin = minutesFromHHMM(nowTime);
+  const future = plan.slots
+    .map((s, i) => ({ s, i, min: minutesFromHHMM(s.time) }))
+    .filter((x) => x.min > nowMin);
+  if (future.length === 0) return plan;
+  const remaining = Math.max(0, plan.totalCarbsG - loggedCarbsG);
+  const slots = plan.slots.map((s) => ({ ...s }));
+  if (remaining <= 0) {
+    for (const x of future) {
+      slots[x.i].carbsG = 0;
+      slots[x.i].color = "red";
+      slots[x.i].explanation = "Tagesziel bereits erreicht – für heute sind keine Kohlenhydrate mehr nötig.";
+    }
+    return { ...plan, slots };
+  }
+  const futureSum = future.reduce((sum, x) => sum + x.s.carbsG, 0);
+  if (futureSum > 0) {
+    for (const x of future) {
+      const scaled = Math.round((x.s.carbsG / futureSum) * remaining);
+      slots[x.i].carbsG = scaled;
+      if (scaled < x.s.carbsG * 0.75) {
+        slots[x.i].color = x.s.color === "green" ? "yellow" : "red";
+      }
+      slots[x.i].explanation =
+        "Neu berechnet nach deinen Logs: " + scaled + " g KH statt " + x.s.carbsG +
+        " g – du hast heute schon " + loggedCarbsG + " von " + plan.totalCarbsG + " g gegessen.";
+    }
+  } else {
+    const weightSum = future.reduce((sum, x) => sum + (x.s.primary ? 1 : 0.55), 0);
+    for (const x of future) {
+      slots[x.i].carbsG = Math.round((remaining / (weightSum || 1)) * (x.s.primary ? 1 : 0.55));
+      slots[x.i].explanation = "Neu berechnet: Restbudget " + remaining + " g KH verteilt auf die übrigen Anlässe.";
+    }
+  }
+  return { ...plan, slots };
+}
+
+/*
+ * Automatische Anlass-Erkennung beim Logging (DUO-35): statt den Nutzer zu
+ * fragen, leitet Fuelix die Fueling-Phase aus der Uhrzeit und den geplanten
+ * Einheiten ab – weniger Fragen, schnellere Logs (Adherence-Forschung:
+ * Zeit pro Log ist der stärkste Abbruchfaktor).
+ */
+export function inferLogPhase(sessions: MealPlanSession[], nowTime: string): MealPhase {
+  const nowMin = minutesFromHHMM(nowTime);
+  if (nowMin < 0) return "snack";
+  const withStart = sessions
+    .filter((s) => s.start !== null && minutesFromHHMM(s.start) >= 0)
+    .map((s) => ({ ...s, start: (s.start as string) }));
+  for (const s of withStart) {
+    const startMin = minutesFromHHMM(s.start);
+    const endMin = startMin + s.durationMin;
+    if (nowMin >= startMin && nowMin <= endMin) return "during";
+    if (nowMin > endMin && nowMin <= endMin + 60) return "post";
+    if (nowMin >= startMin - 240 && nowMin < startMin) return "pre";
+  }
+  return "snack";
 }

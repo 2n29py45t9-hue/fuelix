@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, restOfDayPhase } from "../lib/fueling";
-import { hhmmFromIso, localIso } from "../lib/date";
+import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase } from "../lib/fueling";
+import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM, weekdayIndexMondayFirst } from "../lib/date";
+import { slotsForWeekday } from "../lib/mealSchedule";
 import CarbAmpel from "./CarbAmpel";
 import Tip from "./Tip";
-import type { CarbAmpelPhase, MealLog, MealPhase, TrainingSession } from "../types";
+import type { CarbAmpelPhase, MealLog, MealPhase, MealSlot, TrainingSession } from "../types";
 
 const phaseText: Record<MealPhase, string> = {
   pre: "Vor der Einheit",
@@ -62,6 +63,7 @@ export default function DaySummary({
   weightKg,
   mealLogs,
   birthYear = "",
+  mealSchedule = [],
   onSelectSession
 }: {
   date: string;
@@ -69,6 +71,7 @@ export default function DaySummary({
   weightKg: number;
   mealLogs: MealLog[];
   birthYear?: number | "";
+  mealSchedule?: MealSlot[];
   onSelectSession: (s: TrainingSession) => void;
 }) {
   const [openSession, setOpenSession] = useState<string | null>(null);
@@ -117,6 +120,18 @@ export default function DaySummary({
         (youth ? " – im Wachstum darf die Bilanz nicht ins Minus laufen (RED-S-Schutz)." : " – jetzt noch eine kohlenhydratreiche Mahlzeit für die Regeneration.")
     );
   }
+  // Abend-Prompt (DUO-35): das Abendfenster ist die häufigste unloggierte Lücke.
+  if (isToday && nowHour >= 20 && logsToday.length > 0) {
+    const lastLogHour = logsToday.reduce((max, l) => {
+      const t = hhmmFromIso(l.created_at);
+      return t !== "" ? Math.max(max, Number(t.slice(0, 2))) : max;
+    }, -1);
+    if (lastLogHour < 19) {
+      warnings.push(
+        "Abend-Check: Nach 19 Uhr ist heute nichts mehr geloggt. Der Abend ist die häufigste Lücke – erfasse deinen letzten Snack, damit die Tagesbilanz stimmt."
+      );
+    }
+  }
 
   const phases: CarbAmpelPhase[] = longestSession
     ? [
@@ -141,6 +156,27 @@ export default function DaySummary({
   const plannedCarbs = plans.reduce((sum, p) => sum + p.totalCarbsG, 0);
   const fluid = plans.reduce((sum, p) => sum + p.totalFluidMl, 0);
   const liters = (fluid / 1000).toFixed(1).replace(".", ",");
+
+  // Mahlzeiten-Periodisierung (DUO-35): Raster des Wochentags gegen das
+  // Training periodisieren und – Hexis-Reallocation-Prinzip – nach den
+  // bisherigen Logs neu berechnen. Der naechste Anlass zeigt das angepasste Ziel.
+  const daySlots = mealSchedule.length > 0 ? slotsForWeekday(mealSchedule, weekdayIndexMondayFirst(date)) : [];
+  const mealPlan = daySlots.length > 0
+    ? mealPlanFor({
+        slots: daySlots,
+        sessions: todays.map((s) => ({ start: s.session_start ?? null, durationMin: s.duration_min, intensity: s.intensity, heat: s.heat })),
+        weightKg,
+        dayType,
+        isYouth: youth
+      })
+    : null;
+  const nowHhmm = hhmmNow();
+  const reallocPlan = mealPlan && isToday ? reallocateMealPlan(mealPlan, loggedCarbs, nowHhmm) : null;
+  const nextSlot = reallocPlan
+    ? reallocPlan.slots.find((s) => minutesFromHHMM(s.time) > minutesFromHHMM(nowHhmm))
+    : null;
+  const originalNext = nextSlot && mealPlan ? mealPlan.slots.find((s) => s.time === nextSlot.time) : null;
+  const nextChanged = !!(nextSlot && originalNext && originalNext.carbsG !== nextSlot.carbsG);
 
   // Timeline-Feed (DUO-32): Mahlzeiten und Einheiten chronologisch gemischt,
   // Tiles nach Fueling-Phase farbcodiert (Carb Coding statt Mahlzeitentyp).
@@ -191,7 +227,7 @@ export default function DaySummary({
         <p className="muted">Keine Einheiten an diesem Tag.</p>
       ) : (
         <p className="muted">
-          {todays.length} {todays.length === 1 ? "Einheit" : "Einheiten"} · {minutes} min · {plannedCarbs} g KH geplant · {liters} l Fluessigkeit
+          {todays.length} {todays.length === 1 ? "Einheit" : "Einheiten"} · {minutes} min · {plannedCarbs} g KH geplant · {liters} l Flüssigkeit
         </p>
       )}
 
@@ -233,6 +269,18 @@ export default function DaySummary({
           explain={energyExplain}
         />
       </div>
+
+      {nextSlot ? (
+        <div className="realloc">
+          <span className="realloc-title">
+            Nächster Anlass: {nextSlot.label} ({nextSlot.time})
+            <Tip text={nextSlot.explanation !== "" ? nextSlot.explanation : "Ziel aus deinem Tagesablauf-Raster, periodisiert gegen dein Training. Jeder Log rechnet die restlichen Anlässe neu." />
+          </span>
+          <span className="realloc-value">
+            ≈ {nextSlot.carbsG} g KH · {nextSlot.proteinG} g Protein{nextChanged ? " (neu berechnet)" : ""}
+          </span>
+        </div>
+      ) : null}
 
       <div className="timeline">
         <span className="timeline-title">

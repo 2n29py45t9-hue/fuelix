@@ -79,3 +79,14 @@ export interface RaceDayPhase {
   window: string;
   items: string[];
 }
+
+// Mahlzeiten-Raster (DUO-35): einer Nutzerin/einem Nutzer pro Wochentag,
+// weekday 0 = Montag ... 6 = Sonntag.
+export interface MealSlot {
+  id: string;
+  weekday: number;
+  time: string;
+  label: string;
+  primary_meal: boolean;
+  created_at?: string;
+}

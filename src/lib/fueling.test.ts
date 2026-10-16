@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { intensityFromStrava, mapActivityToSession, sportFromStrava, type StravaActivity } from "./stravaMap";
-import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, restOfDayPhase, youthDailyCarbsPerKg } from "./fueling";
+import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, inferLogPhase, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, youthDailyCarbsPerKg } from "./fueling";
 
 const input = (durationMin: number, intensity: "low" | "moderate" | "high", heat: "normal" | "hot", bodyWeightKg: number) =>
   calculateFuelingPlan({ durationMin, intensity, heat, bodyWeightKg });
@@ -197,6 +197,92 @@ describe("Energieziel-Engine (DUO-33)", () => {
     expect(ok.loggedKcal).toBe(2400);
     expect(ok.pct).toBe(80);
     expect(ok.level).toBe("ok");
+  });
+});
+
+describe("Mahlzeiten-Periodisierung (DUO-35)", () => {
+  const raster = [
+    { time: "07:00", label: "Fruehstueck", primary: true },
+    { time: "12:30", label: "Mittagessen", primary: true },
+    { time: "15:30", label: "Snack", primary: false },
+    { time: "18:30", label: "Abendessen", primary: true }
+  ];
+
+  it("Ruhetag: Restbudget nach Hauptmahlzeit-Snack-Gewichtung, Snack rot", () => {
+    const plan = mealPlanFor({ slots: raster, sessions: [], weightKg: 70, dayType: "rest", isYouth: false });
+    expect(plan.totalCarbsG).toBe(280);
+    expect(plan.sessionFuelG).toBe(0);
+    expect(plan.slots.map((s) => s.carbsG)).toEqual([79, 79, 43, 79]);
+    expect(plan.slots.map((s) => s.color)).toEqual(["yellow", "yellow", "red", "yellow"]);
+    expect(plan.slots[0].proteinG).toBe(28);
+    expect(plan.slots[0].explanation.length).toBeGreaterThan(10);
+  });
+
+  it("Belastungstag: Session-Fuel separat, pre- und post-Anlaesse gruen", () => {
+    const plan = mealPlanFor({
+      slots: raster,
+      sessions: [{ start: "17:00", durationMin: 90, intensity: "moderate", heat: "normal" }],
+      weightKg: 70,
+      dayType: "load",
+      isYouth: false
+    });
+    expect(plan.totalCarbsG).toBe(420);
+    expect(plan.sessionFuelG).toBe(56);
+    const snack = plan.slots.find((s) => s.label === "Snack");
+    const abend = plan.slots.find((s) => s.label === "Abendessen");
+    const frueh = plan.slots.find((s) => s.label === "Fruehstueck");
+    const mittag = plan.slots.find((s) => s.label === "Mittagessen");
+    expect(snack?.relation).toBe("pre");
+    expect(snack?.carbsG).toBe(105);
+    expect(snack?.color).toBe("green");
+    expect(abend?.relation).toBe("post");
+    expect(abend?.carbsG).toBe(70);
+    expect(abend?.proteinG).toBe(28);
+    expect(abend?.color).toBe("green");
+    expect(frueh?.carbsG).toBe(95);
+    expect(mittag?.carbsG).toBe(95);
+  });
+
+  it("Vorabend-Anhebung vor Key-Session am Folgetag (72-h-Prinzip)", () => {
+    const plain = mealPlanFor({ slots: raster, sessions: [], weightKg: 70, dayType: "rest", isYouth: false });
+    const boosted = mealPlanFor({ slots: raster, sessions: [], weightKg: 70, dayType: "rest", isYouth: false, nextDayKey: true });
+    const plainAbend = plain.slots.find((s) => s.label === "Abendessen");
+    const boostedAbend = boosted.slots.find((s) => s.label === "Abendessen");
+    expect(boostedAbend?.carbsG).toBe(Math.round((plainAbend?.carbsG ?? 0) * 1.4));
+    expect(boostedAbend?.color).toBe("green");
+    expect(boostedAbend?.explanation).toContain("72");
+  });
+
+  it("Reallocation: gegessene KH verschieben nur die Zukunft", () => {
+    const plan = mealPlanFor({ slots: raster, sessions: [], weightKg: 70, dayType: "rest", isYouth: false });
+    const re = reallocateMealPlan(plan, 200, "13:00");
+    const snack = re.slots.find((s) => s.label === "Snack");
+    const abend = re.slots.find((s) => s.label === "Abendessen");
+    const frueh = re.slots.find((s) => s.label === "Fruehstueck");
+    expect(snack?.carbsG).toBe(28);
+    expect(abend?.carbsG).toBe(52);
+    expect(frueh?.carbsG).toBe(79);
+    expect(snack?.explanation).toContain("Neu berechnet");
+  });
+
+  it("Reallocation bei ueberschrittenem Tagesziel: keine KH mehr, rot", () => {
+    const plan = mealPlanFor({ slots: raster, sessions: [], weightKg: 70, dayType: "rest", isYouth: false });
+    const re = reallocateMealPlan(plan, 300, "13:00");
+    const future = re.slots.filter((s) => s.time > "13:00");
+    expect(future.length).toBe(2);
+    future.forEach((s) => {
+      expect(s.carbsG).toBe(0);
+      expect(s.color).toBe("red");
+    });
+  });
+
+  it("Anlass-Erkennung aus Uhrzeit und geplanter Einheit", () => {
+    const sessions = [{ start: "17:00", durationMin: 90, intensity: "moderate", heat: "normal" }];
+    expect(inferLogPhase(sessions, "16:00")).toBe("pre");
+    expect(inferLogPhase(sessions, "17:30")).toBe("during");
+    expect(inferLogPhase(sessions, "18:45")).toBe("post");
+    expect(inferLogPhase(sessions, "20:00")).toBe("snack");
+    expect(inferLogPhase([], "08:00")).toBe("snack");
   });
 });
 

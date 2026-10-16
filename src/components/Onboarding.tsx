@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { ageFromBirthYear, isYouthAthlete } from "../lib/fueling";
+import { ageFromBirthYear, isYouthAthlete, type MealSlotInput } from "../lib/fueling";
+import { defaultRaster, saveMealSchedule, WEEKDAY_LONG } from "../lib/mealSchedule";
+import MealScheduleEditor from "./MealScheduleEditor";
 import "../onboarding.css";
 
 /*
@@ -9,7 +11,8 @@ import "../onboarding.css";
  * "Ueberspringen" speichert ein Default-Profil, damit der Dialog niemanden
  * blockiert. Jede Frage hat einen erkennbaren Nutzen: Gewicht und Geburtsjahr
  * speisen die Fueling- und Energie-Engine, der Hauptsport praegt die
- * Voreinstellung neuer Trainingseinheiten.
+ * Voreinstellung neuer Trainingseinheiten, und das Mahlzeitenraster (DUO-35)
+ * legt fest, wie die Tagesziele auf Anlässe verteilt werden.
  */
 
 const SPORTS = ["Radsport", "Laufen", "Triathlon", "Schwimmen", "Krafttraining", "Sonstiges"];
@@ -19,12 +22,15 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [weightKg, setWeightKg] = useState(70);
   const [birthYear, setBirthYear] = useState<number | "">("");
   const [mainSport, setMainSport] = useState("Radsport");
+  const [raster, setRaster] = useState<MealSlotInput[][]>(defaultRaster());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const age = birthYear === "" ? null : ageFromBirthYear(Number(birthYear));
   const youth = isYouthAthlete(age);
   const weightValid = weightKg >= 30 && weightKg <= 150;
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const todayMeals = raster[todayIdx]?.length ?? 0;
 
   const finish = async (skip: boolean) => {
     setBusy(true);
@@ -50,6 +56,12 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         return;
       }
     }
+    // Mahlzeitenraster speichern (DUO-35). Fehler blockieren das Onboarding nicht.
+    try {
+      await saveMealSchedule(raster);
+    } catch {
+      /* Raster kann im Kalender-Tab nachgepflegt werden */
+    }
     setBusy(false);
     onDone();
   };
@@ -58,7 +70,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     <div className="onboarding">
       <div className="ob-card">
         <div className="ob-dots">
-          {[0, 1, 2, 3].map((i) => (
+          {[0, 1, 2, 3, 4].map((i) => (
             <span key={i} className={i === step ? "ob-dot ob-dot-active" : "ob-dot"} />
           ))}
         </div>
@@ -70,6 +82,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             <ul>
               <li>Ziele pro Training: Kohlenhydrate, Flüssigkeit und Natrium – berechnet aus Dauer, Intensität, Hitze und Körpergewicht.</li>
               <li>Carb-Ampel: Farbcodes zeigen, wann Fueling wichtig ist.</li>
+              <li>Periodisierung pro Mahlzeit: Deine Tagesziele werden auf deine echten Essenszeiten verteilt – gegen dein Training.</li>
               <li>RED-S-Schutz: Warnt vor Unterernährung – besonders im Jugend-Modus (U15-U19).</li>
             </ul>
             <button type="button" onClick={() => setStep(1)}>Los geht's</button>
@@ -133,13 +146,30 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
         {step === 3 ? (
           <div className="ob-step">
+            <h2>Dein Tagesablauf</h2>
+            <p>
+              Wann und wie oft isst du normalerweise? Darauf verteilen wir später deine Tagesziele – pro Anlass und
+              gegen dein Training periodisiert. Jeder Wochentag ist einzeln einstellbar.
+            </p>
+            <MealScheduleEditor initial={raster} onChange={setRaster} embedded />
+            <div className="ob-actions">
+              <button type="button" className="link" onClick={() => setStep(2)}>Zurück</button>
+              <button type="button" onClick={() => setStep(4)}>Weiter</button>
+            </div>
+          </div>
+        ) : null}
+
+        {step === 4 ? (
+          <div className="ob-step">
             <h2>Alles bereit</h2>
             <p>
-              {weightKg} kg · {youth ? "Jugend-Modus (U15-U19)" : "Erwachsenen-Ziele"} · Fokus {mainSport}
+              {weightKg} kg · {youth ? "Jugend-Modus (U15-U19)" : "Erwachsenen-Ziele"} · Fokus {mainSport} ·{" "}
+              {todayMeals} Anlässe am {WEEKDAY_LONG[todayIdx]}
             </p>
             <p>
-              So geht's weiter: Über das Plus unten rechts erfassest du Mahlzeiten in unter 3 Sekunden. Im Plan-Tab
-              legst du deine erste Trainingseinheit an und bekommst sofort deinen Fueling-Plan.
+              So geht's weiter: Über das Plus unten erfassest du Mahlzeiten in unter 3 Sekunden – der Anlass wird
+              automatisch erkannt. Im Kalender-Tab siehst du deine Woche mit den vorgeschlagenen Zielen pro Mahlzeit,
+              im Plan-Tab legst du Trainingseinheiten an und bekommst deinen Fueling-Plan.
             </p>
             <button type="button" onClick={() => finish(false)} disabled={busy}>
               {busy ? "Speichere ..." : "Fuelix starten"}
