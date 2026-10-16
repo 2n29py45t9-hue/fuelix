@@ -33,3 +33,10 @@ export function weekdayIndexMondayFirst(iso: string): number {
   const d = new Date(iso + "T12:00:00");
   return (d.getDay() + 6) % 7;
 }
+
+/* Fueling-Timeline (DUO-37): Tagesminuten zurueck in "HH:MM", auf den Tag geclamped. */
+export function hhmmFromMinutes(totalMin: number): string {
+  const clamped = Math.max(0, Math.min(23 * 60 + 59, Math.round(totalMin)));
+  return String(Math.floor(clamped / 60)).padStart(2, "0") + ":" + String(clamped % 60).padStart(2, "0");
+}
+

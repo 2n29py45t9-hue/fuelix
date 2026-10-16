@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { intensityFromStrava, mapActivityToSession, sportFromStrava, type StravaActivity } from "./stravaMap";
-import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, inferLogPhase, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, youthDailyCarbsPerKg } from "./fueling";
+import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, inferLogPhase, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, sessionFuelingCheckpoints, youthDailyCarbsPerKg } from "./fueling";
 import { overridesForDate, slotsForDate } from "./schedule";
 import type { MealOverride, MealSlot } from "../types";
 
@@ -362,5 +362,101 @@ describe("Kalender: Routine vs. Einzeltermin (DUO-36)", () => {
   it("overridesForDate sortiert nach Uhrzeit", () => {
     const sorted = overridesForDate(ovs, "2026-10-16");
     expect(sorted.map((s) => s.time)).toEqual(["08:00", "11:00"]);
+  });
+});
+
+
+describe("Fueling-Integration in Timeline und Mahlzeiten (DUO-37)", () => {
+  it("Checkpoints fuer lange Einheit: vor, waehrend, danach mit Uhrzeit und Ziel", () => {
+    const cps = sessionFuelingCheckpoints(
+      { start: "17:00", durationMin: 120, intensity: "high", heat: "normal" },
+      "Radsport",
+      70
+    );
+    expect(cps.map((c) => c.key)).toEqual(["pre", "during", "post"]);
+    expect(cps[0].time).toBe("15:00");
+    expect(cps[0].carbsG).toBe(105);
+    expect(cps[0].fluidMl).toBe(490);
+    expect(cps[0].color).toBe("green");
+    expect(cps[1].time).toBe("17:00");
+    expect(cps[1].carbsG).toBe(105);
+    expect(cps[1].fluidMl).toBe(750);
+    expect(cps[1].sodiumMg).toBe(600);
+    expect(cps[1].color).toBe("green");
+    expect(cps[2].time).toBe("19:00");
+    expect(cps[2].carbsG).toBe(84);
+    expect(cps[2].proteinG).toBe(25);
+  });
+
+  it("Kurze Einheit: kein Waehrend-Checkpoint, pre/post gelb", () => {
+    const cps = sessionFuelingCheckpoints(
+      { start: "10:00", durationMin: 30, intensity: "moderate", heat: "normal" },
+      "Laufen",
+      70
+    );
+    expect(cps.map((c) => c.key)).toEqual(["pre", "post"]);
+    expect(cps[0].color).toBe("yellow");
+    expect(cps[0].time).toBe("08:00");
+    expect(cps[1].color).toBe("yellow");
+  });
+
+  it("Ohne Startzeit keine Checkpoints (Ganztags-Einheit)", () => {
+    expect(
+      sessionFuelingCheckpoints({ start: null, durationMin: 60, intensity: "moderate", heat: "normal" }, "Radsport", 70)
+    ).toEqual([]);
+  });
+
+  it("Mahlzeiten tragen die zugehoerige Einheit: Fueling steckt in der Mahlzeit", () => {
+    const plan = mealPlanFor({
+      slots: [
+        { time: "07:00", label: "Frühstück", primary: true },
+        { time: "12:30", label: "Mittagessen", primary: true }
+      ],
+      sessions: [{ start: "10:00", durationMin: 60, intensity: "low", heat: "normal", sport: "Laufen" }],
+      weightKg: 70,
+      dayType: "load",
+      isYouth: false
+    });
+    const frueh = plan.slots.find((s) => s.label === "Frühstück");
+    expect(frueh?.relation).toBe("pre");
+    expect(frueh?.sessionLabel).toBe("Laufen");
+    expect(frueh?.sessionTime).toBe("10:00");
+    expect(frueh?.carbsG).toBe(70);
+    expect(frueh?.explanation).toContain("Laufen");
+  });
+
+  it("Recovery-Mahlzeit nach der Einheit erhaelt Einheits-Bezug", () => {
+    const plan = mealPlanFor({
+      slots: [
+        { time: "07:00", label: "Frühstück", primary: true },
+        { time: "18:30", label: "Abendessen", primary: true }
+      ],
+      sessions: [{ start: "17:00", durationMin: 90, intensity: "moderate", heat: "normal", sport: "Radsport" }],
+      weightKg: 70,
+      dayType: "load",
+      isYouth: false
+    });
+    const abend = plan.slots.find((s) => s.label === "Abendessen");
+    expect(abend?.relation).toBe("post");
+    expect(abend?.sessionLabel).toBe("Radsport");
+    expect(abend?.sessionTime).toBe("17:00");
+    expect(abend?.explanation).toContain("Radsport");
+  });
+
+  it("Reallocation bewahrt den Einheits-Bezug der Mahlzeit", () => {
+    const plan = mealPlanFor({
+      slots: [
+        { time: "07:00", label: "Frühstück", primary: true },
+        { time: "18:30", label: "Abendessen", primary: true }
+      ],
+      sessions: [{ start: "17:00", durationMin: 90, intensity: "moderate", heat: "normal", sport: "Radsport" }],
+      weightKg: 70,
+      dayType: "load",
+      isYouth: false
+    });
+    const re = reallocateMealPlan(plan, 100, "12:00");
+    const abend = re.slots.find((s) => s.label === "Abendessen");
+    expect(abend?.sessionLabel).toBe("Radsport");
+    expect(abend?.relation).toBe("post");
   });
 });

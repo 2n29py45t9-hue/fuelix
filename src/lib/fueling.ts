@@ -1,4 +1,4 @@
-import { minutesFromHHMM } from "./date";
+import { hhmmFromMinutes, minutesFromHHMM } from "./date";
 import type { AmpelColor, CarbAmpelPhase, DayType, FuelingPlan, Heat, Intensity, MealPhase, RaceDayPhase } from "../types";
 
 export interface FuelingInput {
@@ -449,6 +449,7 @@ export interface MealPlanSession {
   durationMin: number;
   intensity: Intensity;
   heat: Heat;
+  sport?: string;
 }
 
 export interface MealSlotPlan {
@@ -460,6 +461,8 @@ export interface MealSlotPlan {
   color: AmpelColor;
   relation: "pre" | "post" | "free";
   explanation: string;
+  sessionLabel?: string;
+  sessionTime?: string;
 }
 
 export interface MealDayPlan {
@@ -519,9 +522,15 @@ export function mealPlanFor(input: {
       result[preIdx].carbsG = Math.max(result[preIdx].carbsG, Math.round(kg * perKg));
       result[preIdx].relation = "pre";
       result[preIdx].color = "green";
+      result[preIdx].sessionLabel = sess.sport;
+      result[preIdx].sessionTime = sess.start;
       result[preIdx].explanation =
         "Trainingsnah (vor der Einheit): ca. " + perKg + " g KH pro kg (" + Math.round(kg * perKg) +
         " g) bis 4 h vor dem Start laden die Glykogenspeicher – das Carb Coding setzt deine größte Portion dorthin.";
+    }
+
+    if (preIdx >= 0 && sess.sport) {
+      result[preIdx].explanation += " Diese Mahlzeit ist dein Vor-Fueling fuer " + sess.sport + " (" + sess.start + ").";
     }
 
     const endMin = startMin + sess.durationMin;
@@ -537,6 +546,9 @@ export function mealPlanFor(input: {
       result[postIdx].explanation =
         "Regenerationsfenster (nach der Einheit): ca. " + plan.postCarbsG + " g KH (1,0-1,2 g/kg) plus " +
         plan.postProteinG + " g Protein starten die Erholung, solange die Speicher am aufnahmefähigsten sind.";
+    }
+    if (postIdx >= 0 && sess.sport) {
+      result[postIdx].explanation += " Diese Mahlzeit ist dein Recovery-Fueling nach " + sess.sport + " (" + sess.start + ").";
     }
   }
 
@@ -607,6 +619,86 @@ export function mealPlanFor(input: {
  * Restbudget, statt nur einen Balken zu füllen. Vergangene Anlässe bleiben
  * unangetastet, die Zukunft passt sich an.
  */
+/*
+ * Fueling-Plan als Timeline-Anker (DUO-37): pro geplanter Einheit die
+ * Fueling-Fenster mit konkreter Uhrzeit und Ziel - Vor der Einheit
+ * (KH-Mahlzeit 1-3 h vorher inkl. Trinken), Waehrend (Session-Fuel-Rate,
+ * separates Budget) und Danach (60-min-Regenerationsfenster). Reine
+ * Funktion: DaySummary legt die Kacheln chronologisch in die Timeline;
+ * liegt eine Raster-Mahlzeit im Fenster, uebernimmt deren Ziel bereits
+ * das Fueling (sessionLabel am Slot) und das orphan-Fenster entfaellt.
+ */
+export interface FuelingCheckpoint {
+  key: "pre" | "during" | "post";
+  time: string;
+  label: string;
+  carbsG: number;
+  proteinG: number;
+  fluidMl: number;
+  sodiumMg: number;
+  color: AmpelColor;
+  explanation: string;
+}
+
+export function sessionFuelingCheckpoints(session: MealPlanSession, sport: string, weightKg: number): FuelingCheckpoint[] {
+  if (!session.start) return [];
+  const startMin = minutesFromHHMM(session.start);
+  if (startMin < 0) return [];
+  const plan = calculateFuelingPlan({
+    durationMin: session.durationMin,
+    intensity: session.intensity,
+    heat: session.heat,
+    bodyWeightKg: weightKg
+  });
+  const name = sport || "Einheit";
+  const short = session.durationMin < 45;
+  const checkpoints: FuelingCheckpoint[] = [];
+
+  checkpoints.push({
+    key: "pre",
+    time: hhmmFromMinutes(startMin - 120),
+    label: "Vor dem " + name,
+    carbsG: plan.preCarbsG,
+    proteinG: 0,
+    fluidMl: plan.preFluidMl,
+    sodiumMg: 0,
+    color: short ? "yellow" : "green",
+    explanation: short
+      ? "Kurze Einheit: eine normale Mahlzeit 1-2 h vorher genuegt, die Speicher sind schon gefuellt - ca. " + plan.preCarbsG + " g KH und " + plan.preFluidMl + " ml Fluessigkeit."
+      : "Vor-Fueling: ca. " + plan.preCarbsG + " g KH (1,0-1,5 g/kg) 1-3 h vor dem Start laden die Glykogenspeicher, dazu ca. " + plan.preFluidMl + " ml trinken. Liegt eine Mahlzeit aus deinem Raster in diesem Fenster, ist ihr Ziel bereits hochgerechnet."
+  });
+
+  if (plan.carbsPerHour > 0) {
+    checkpoints.push({
+      key: "during",
+      time: session.start,
+      label: "Session-Fuel · " + name,
+      carbsG: plan.totalCarbsG,
+      proteinG: 0,
+      fluidMl: plan.fluidPerHour,
+      sodiumMg: plan.sodiumPerHour,
+      color: plan.carbsPerHour >= 60 ? "green" : "yellow",
+      explanation: "Waehrend der Einheit: " + plan.carbsPerHour + " g KH/h (insgesamt ca. " + plan.totalCarbsG + " g)" +
+        (plan.carbsPerHour >= 60 ? " als Glukose-Fruktose-Mix" : "") +
+        ", Trinkrate ca. " + plan.fluidPerHour + " ml/h, " + plan.sodiumPerHour + " mg Natrium/h. Dieses Budget ist separat von deinen Mahlzeiten - logge es unten als Einheiten-Fueling."
+    });
+  }
+
+  checkpoints.push({
+    key: "post",
+    time: hhmmFromMinutes(startMin + session.durationMin),
+    label: "Danach · Recovery",
+    carbsG: plan.postCarbsG,
+    proteinG: plan.postProteinG,
+    fluidMl: plan.postFluidMl,
+    sodiumMg: 0,
+    color: session.durationMin >= 60 ? "green" : "yellow",
+    explanation: "60-min-Fenster: ca. " + plan.postCarbsG + " g KH plus " + plan.postProteinG + " g Protein starten die Regeneration, dazu ca. " + plan.postFluidMl + " ml (Schweissverlust ~" + plan.estimatedSweatL + " l). Liegt deine naechste Mahlzeit in diesem Fenster, ist ihr Ziel bereits hochgerechnet."
+  });
+
+  return checkpoints;
+}
+
 export function reallocateMealPlan(plan: MealDayPlan, loggedCarbsG: number, nowTime: string): MealDayPlan {
   const nowMin = minutesFromHHMM(nowTime);
   const future = plan.slots
@@ -666,3 +758,4 @@ export function inferLogPhase(sessions: MealPlanSession[], nowTime: string): Mea
   }
   return "snack";
 }
+

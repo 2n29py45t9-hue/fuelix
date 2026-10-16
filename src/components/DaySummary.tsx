@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, type MealSlotPlan } from "../lib/fueling";
+import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, sessionFuelingCheckpoints, type FuelingCheckpoint, type MealSlotPlan } from "../lib/fueling";
 import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM } from "../lib/date";
 import { slotsForDate } from "../lib/mealSchedule";
 import CarbAmpel from "./CarbAmpel";
@@ -37,7 +37,8 @@ function Bar({ value, max, label, unit, explain }: { value: number; max: number;
 type FeedItem =
   | { kind: "meal"; time: string; log: MealLog }
   | { kind: "session"; time: string; session: TrainingSession }
-  | { kind: "slot"; time: string; slot: MealSlotPlan };
+  | { kind: "slot"; time: string; slot: MealSlotPlan }
+  | { kind: "fueling"; time: string; cp: FuelingCheckpoint };
 
 function SessionDrawer({ session, weightKg, onOpenPlan }: { session: TrainingSession; weightKg: number; onOpenPlan: () => void }) {
   const plan = calculateFuelingPlan({
@@ -168,7 +169,7 @@ export default function DaySummary({
   const mealPlan = daySlots.length > 0
     ? mealPlanFor({
         slots: daySlots,
-        sessions: todays.map((s) => ({ start: s.session_start ?? null, durationMin: s.duration_min, intensity: s.intensity, heat: s.heat })),
+        sessions: todays.map((s) => ({ start: s.session_start ?? null, durationMin: s.duration_min, intensity: s.intensity, heat: s.heat, sport: s.sport })),
         weightKg,
         dayType,
         isYouth: youth
@@ -185,8 +186,31 @@ export default function DaySummary({
   // Timeline-Feed (DUO-32 + DUO-36): geplante Anlässe aus der Routine
   // (gestrichelt, mit Ziel), ALLE geloggten Mahlzeiten und Snacks sowie
   // Einheiten - chronologisch gemischt, damit der Überblick stimmt.
+  // Fueling-Plan in die Timeline (DUO-37): pro geplanter Einheit die
+  // Fueling-Fenster Vor / Waehrend / Danach als eigene Kacheln mit
+  // konkreter Uhrzeit und Ziel. Uebernimmt eine Mahlzeit aus dem Raster
+  // das Vor- oder Recovery-Fueling (sessionLabel am Slot), entfaellt
+  // die orphan-Kachel - das Fueling steckt dann in der Mahlzeit.
+  const fuelingItems: FeedItem[] = [];
+  for (const s of todays) {
+    if (!s.session_start) continue;
+    const cps = sessionFuelingCheckpoints(
+      { start: s.session_start, durationMin: s.duration_min, intensity: s.intensity, heat: s.heat, sport: s.sport },
+      s.sport,
+      weightKg
+    );
+    const hasPreSlot = !!(mealPlan && mealPlan.slots.some((sl) => sl.relation === "pre" && sl.sessionTime === s.session_start));
+    const hasPostSlot = !!(mealPlan && mealPlan.slots.some((sl) => sl.relation === "post" && sl.sessionTime === s.session_start));
+    for (const cp of cps) {
+      if (cp.key === "pre" && hasPreSlot) continue;
+      if (cp.key === "post" && hasPostSlot) continue;
+      fuelingItems.push({ kind: "fueling", time: cp.time, cp });
+    }
+  }
+
   const feed: FeedItem[] = [
     ...(mealPlan ? mealPlan.slots.map((s) => ({ kind: "slot" as const, time: s.time, slot: s })) : []),
+    ...fuelingItems,
     ...logsToday.map((l) => ({ kind: "meal" as const, time: hhmmFromIso(l.created_at), log: l })),
     ...todays.map((s) => ({ kind: "session" as const, time: s.session_start || "", session: s }))
   ].sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
@@ -290,7 +314,7 @@ export default function DaySummary({
 
       <div className="timeline">
         <span className="timeline-title">
-          Timeline <Tip text="Dein Tag im Überblick: gestrichelte Kacheln sind geplante Anlässe aus deiner Routine mit ihrem Ziel (Farbe = KH-Betonung), ausgefüllte Kacheln alles, was du geloggt hast – auch jeder zusätzliche Snack. Farben der Logs nach Fueling-Phase: Blau = vor der Einheit, Gelb = während, Grün = danach, Grau = Snack/sonstige." />
+          Timeline <Tip text="Dein Tag im Überblick: gestrichelte Kacheln sind geplant – graue aus deiner Routine mit Ziel (Farbe = KH-Betonung), blaue sind Fueling-Fenster um deine Einheit (Vor / Während / Danach) mit konkreten Gramm- und Trinkzielen. Mahlzeiten mit Einheits-Bezug tragen einen blauen Verweis, z. B. Frühstück → Laufen. Ausgefüllte Kacheln sind alles, was du geloggt hast – auch jeder zusätzliche Snack. Log-Farben: Blau = vor der Einheit, Gelb = während, Grün = danach, Grau = Snack/sonstige." />
         </span>
         {feed.length === 0 ? (
           <span className="muted timeline-empty">Noch nichts an diesem Tag – tippe unten auf + zum Loggen.</span>
@@ -303,6 +327,9 @@ export default function DaySummary({
                   <div className="slottile">
                     <span className={"calslot-dot " + f.slot.color} />
                     <span className="tile-name">{f.slot.label}</span>
+                    {f.slot.sessionLabel ? (
+                      <span className="slottile-link">→ {f.slot.sessionLabel} {f.slot.sessionTime}</span>
+                    ) : null}
                     <span className="slottile-target">Ziel ≈ {f.slot.carbsG} g KH · {f.slot.proteinG} g P</span>
                     <Tip text={f.slot.explanation !== "" ? f.slot.explanation : "Geplanter Anlass aus deiner Routine – periodisiert gegen dein Training."} />
                   </div>
@@ -320,6 +347,20 @@ export default function DaySummary({
                       <span><strong>{Math.round(Number(f.log.protein_g))}</strong> g P</span>
                       <span><strong>{Math.round(Number(f.log.fat_g))}</strong> g F</span>
                     </div>
+                  </div>
+                </div>
+              ) : f.kind === "fueling" ? (
+                <div className="feedrow" key={"fu" + i + f.cp.key + f.cp.time}>
+                  <span className="feedtime">{f.cp.time}</span>
+                  <div className="fueltile">
+                    <span className={"calslot-dot " + f.cp.color} />
+                    <span className="tile-name">{f.cp.label}</span>
+                    <span className="fueltile-target">
+                      {f.cp.key === "during"
+                        ? f.cp.carbsG + " g KH · " + f.cp.fluidMl + " ml/h · " + f.cp.sodiumMg + " mg Na/h"
+                        : "≈ " + f.cp.carbsG + " g KH" + (f.cp.proteinG > 0 ? " · " + f.cp.proteinG + " g P" : "") + " · " + f.cp.fluidMl + " ml"}
+                    </span>
+                    <Tip text={f.cp.explanation} />
                   </div>
                 </div>
               ) : (
@@ -362,3 +403,4 @@ export default function DaySummary({
     </div>
   );
 }
+

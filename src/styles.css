@@ -243,6 +243,11 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 /* Timeline: geplante Anlässe (Routine/Override) als gestrichelte Kacheln */
 .slottile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed #475569; border-radius: var(--radius-inner); font-size: 13px; color: #e2e8f0; }
 .slottile-target { color: #cbd5e1; font-size: 12px; font-family: "JetBrains Mono", monospace; }
+.slottile-link { font-size: 11px; font-weight: 600; color: #93c5fd; background: rgba(59, 130, 246, 0.15); border-radius: 999px; padding: 2px 8px; }
+/* DUO-37: Fueling-Plan in der Timeline - blaue gestrichelte Fenster um die Einheit */
+.fueltile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed #3b82f6; background: rgba(59, 130, 246, 0.08); border-radius: var(--radius-inner); font-size: 13px; color: #e2e8f0; }
+.fueltile .tile-name { font-size: 13px; }
+.fueltile-target { color: #bfdbfe; font-size: 12px; font-family: "JetBrains Mono", monospace; }
 /* Override-Scope-Auswahl im Bottom-Sheet (Notion: nur dieses Datum vs. alle Wiederholungen) */
 .ov-scopes { display: flex; gap: 8px; margin: 10px 0; }
 .ov-scope { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #0f172a; border: 1px solid #334155; border-radius: var(--radius-inner); font-size: 12px; color: #94a3b8; cursor: pointer; }
@@ -262,3 +267,4 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .mse-primary.on { border-color: #22c55e; color: #4ade80; }
 .mse-actions { display: flex; gap: 16px; margin-top: 10px; }
 .mse-actions .link { margin-top: 0; }
+
