@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
+import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { calculateFuelingPlan } from "./lib/fueling";
 import type { FuelingPlan, TrainingSession } from "./types";
+import Auth from "./components/Auth";
 import SessionForm from "./components/SessionForm";
 import PlanCard from "./components/PlanCard";
 import SessionList from "./components/SessionList";
+import DaySummary from "./components/DaySummary";
 
 export default function App() {
+  const [authSession, setAuthSession] = useState<SupabaseSession | null>(null);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [weightKg, setWeightKg] = useState(70);
   const [selected, setSelected] = useState<TrainingSession | null>(null);
   const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setAuthSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => setAuthSession(newSession));
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   const load = useCallback(async () => {
     const profileRes = await supabase.from("profile").select("*").limit(1);
@@ -22,8 +32,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (authSession) load();
+  }, [authSession, load]);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
 
   const saveWeight = async () => {
     const existing = await supabase.from("profile").select("id").limit(1);
@@ -45,12 +59,20 @@ export default function App() {
       })
     : null;
 
+  if (!authSession) {
+    return <Auth />;
+  }
+
   return (
     <div className="app">
       <header>
         <h1>Fuelix 🚴</h1>
         <p>Fueling-Plan pro Einheit – dein eigenes Hexis.live</p>
+        <button className="link" onClick={signOut}>
+          Abmelden
+        </button>
       </header>
+      <DaySummary sessions={sessions} weightKg={weightKg} />
       <div className="weight">
         <label htmlFor="weight">Körpergewicht (kg): </label>
         <input
