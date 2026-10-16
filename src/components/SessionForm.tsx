@@ -1,18 +1,23 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import { localIso } from "../lib/date";
 import type { TrainingSession } from "../types";
 
-export default function SessionForm({ onCreated }: { onCreated: (s: TrainingSession) => void }) {
+export default function SessionForm({ defaultSport, onCreated }: { defaultSport?: string; onCreated: (s: TrainingSession) => void }) {
   const [sessionDate, setSessionDate] = useState(localIso());
   const [sessionStart, setSessionStart] = useState("");
-  const [sport, setSport] = useState("Radsport");
+  const [sport, setSport] = useState(defaultSport ?? "Radsport");
   const [durationMin, setDurationMin] = useState(90);
   const [intensity, setIntensity] = useState("moderate");
   const [heat, setHeat] = useState("normal");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // Voreinstellung aus dem Onboarding (Hauptsport) uebernehmen, sobald geladen.
+  useEffect(() => {
+    if (defaultSport) setSport(defaultSport);
+  }, [defaultSport]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

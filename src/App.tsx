@@ -16,6 +16,7 @@ import QuickLog from "./components/QuickLog";
 import RaceDayWizard from "./components/RaceDayWizard";
 import BottomNav from "./components/BottomNav";
 import StravaSync from "./components/StravaSync";
+import Onboarding from "./components/Onboarding";
 import { consumeHandoff } from "./lib/strava";
 
 type Tab = "plan" | "trends" | "more";
@@ -26,10 +27,12 @@ export default function App() {
   const [mealLogs, setMealLogs] = useState<MealLog[]>([]);
   const [weightKg, setWeightKg] = useState(70);
   const [birthYear, setBirthYear] = useState<number | "">("");
+  const [mainSport, setMainSport] = useState("Radsport");
   const [selected, setSelected] = useState<TrainingSession | null>(null);
   const [selectedDate, setSelectedDate] = useState(localIso());
   const [activeTab, setActiveTab] = useState<Tab>("plan");
   const [logSheet, setLogSheet] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [status, setStatus] = useState("");
 
   useEffect(() => {
@@ -52,6 +55,11 @@ export default function App() {
       setWeightKg(Number(profileRes.data[0].body_weight_kg));
       const by = profileRes.data[0].birth_year;
       setBirthYear(by ? Number(by) : "");
+      setMainSport(profileRes.data[0].main_sport ?? "Radsport");
+      setShowOnboarding(false);
+    } else {
+      // Onboarding (DUO-34): kein Profil -> gefuehrter Einstieg.
+      setShowOnboarding(true);
     }
     if (sessionsRes.data) setSessions(sessionsRes.data as TrainingSession[]);
     if (logsRes.data) setMealLogs(logsRes.data as MealLog[]);
@@ -135,6 +143,7 @@ export default function App() {
             <DaySummary date={selectedDate} sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} onSelectSession={showSession} />
             <div className="grid">
               <SessionForm
+                defaultSport={mainSport}
                 onCreated={(s) => {
                   setSelected(s);
                   setSelectedDate(s.session_date);
@@ -196,6 +205,8 @@ export default function App() {
           </>
         ) : null}
       </main>
+
+      {showOnboarding ? <Onboarding onDone={load} /> : null}
 
       {logSheet ? (
         <>

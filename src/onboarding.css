@@ -1,0 +1,18 @@
+/* Onboarding (DUO-34): gefuehrter Einstieg als Vollbild-Karte ueber der App */
+.onboarding { position: fixed; inset: 0; z-index: 70; background: #0f172a; overflow-y: auto; display: flex; align-items: center; justify-content: center; padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.ob-card { width: 100%; max-width: 420px; background: #1e293b; border-radius: 16px; padding: 24px 20px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+.ob-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 18px; }
+.ob-dot { width: 8px; height: 8px; border-radius: 999px; background: #334155; }
+.ob-dot-active { background: #22c55e; }
+.ob-step h2 { margin: 0 0 8px; font-size: 22px; }
+.ob-step p { color: #cbd5e1; font-size: 14px; line-height: 1.5; }
+.ob-step ul { margin: 12px 0; padding-left: 18px; color: #cbd5e1; font-size: 14px; line-height: 1.6; }
+.ob-hint { background: #14532d; color: #bbf7d0; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 10px; line-height: 1.5; }
+.ob-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.ob-chip { margin: 0; background: #0f172a; color: #cbd5e1; border: 1px solid #334155; border-radius: 999px; padding: 10px 16px; font-size: 14px; min-height: 44px; cursor: pointer; }
+.ob-chip:hover { filter: none; border-color: #22c55e; color: #e2e8f0; }
+.ob-chip-active { background: #22c55e; border-color: #22c55e; color: #052e16; font-weight: 700; }
+.ob-actions { display: flex; justify-content: space-between; margin-top: 18px; }
+.ob-actions button { margin-top: 0; }
+.ob-skip { display: block; margin: 12px auto 0; background: transparent; color: #64748b; font-size: 13px; font-weight: 400; padding: 4px 0; min-height: 0; }
+.ob-skip:hover { filter: none; color: #94a3b8; }
