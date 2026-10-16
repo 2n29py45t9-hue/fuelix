@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCarbAmpel, buildRaceDayPlan, calculateFuelingPlan, dayTypeFor, dayTypeLabel, restOfDayPhase } from "./fueling";
+import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, isYouthAthlete, restOfDayPhase, youthDailyCarbsPerKg } from "./fueling";
 
 const input = (durationMin: number, intensity: "low" | "moderate" | "high", heat: "normal" | "hot", bodyWeightKg: number) =>
   calculateFuelingPlan({ durationMin, intensity, heat, bodyWeightKg });
@@ -109,5 +109,49 @@ describe("Race-Day-Wizard (DUO-29)", () => {
     expect(during?.items.join(" ")).toContain("Elektrolyt-Getraenk");
     const after = plan.find((p) => p.key === "after");
     expect(after?.items.join(" ")).toContain("Protein");
+  });
+});
+
+describe("Youth Mode (DUO-31)", () => {
+  const now = new Date("2026-06-15T12:00:00Z");
+
+  it("Altersberechnung aus Geburtsjahr und Jugend-Erkennung", () => {
+    expect(ageFromBirthYear(2008, now)).toBe(18);
+    expect(ageFromBirthYear(2013, now)).toBe(13);
+    expect(isYouthAthlete(ageFromBirthYear(2008, now))).toBe(true);
+    expect(isYouthAthlete(ageFromBirthYear(2006, now))).toBe(false);
+    expect(isYouthAthlete(ageFromBirthYear(2014, now))).toBe(false);
+    expect(isYouthAthlete(null)).toBe(false);
+    expect(ageFromBirthYear(2030, now)).toBe(null);
+  });
+
+  it("Jugend-Ziele liegen hoeher: Ruhetag 5, Belastung 7, Rennen 8 g/kg", () => {
+    expect(youthDailyCarbsPerKg("rest")).toBe(5);
+    expect(youthDailyCarbsPerKg("load")).toBe(7);
+    expect(youthDailyCarbsPerKg("race")).toBe(8);
+  });
+
+  it("dailyTargetsFor: Jugend vs. Erwachsener", () => {
+    const youth = dailyTargetsFor("rest", 60, true);
+    const adult = dailyTargetsFor("rest", 60, false);
+    expect(youth.carbsG).toBe(300);
+    expect(adult.carbsG).toBe(240);
+    expect(youth.proteinG).toBe(102);
+    expect(adult.proteinG).toBe(96);
+  });
+
+  it("RED-S-Warnungen bei Unter-Ernaehrung, Ruhe bei ausreichender Zufuhr", () => {
+    const warnings = buildRedsWarnings({ dayType: "load", trainingMinutes: 120, loggedCarbsG: 100, targetCarbsG: 480, isYouth: true });
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.join(" ")).toContain("RED-S");
+    const ok = buildRedsWarnings({ dayType: "load", trainingMinutes: 120, loggedCarbsG: 450, targetCarbsG: 480, isYouth: true });
+    expect(ok.length).toBe(0);
+  });
+
+  it("Ruhetag-Warnung formuliert fuer Jugend das Wachstum mit", () => {
+    const youth = buildRedsWarnings({ dayType: "rest", trainingMinutes: 0, loggedCarbsG: 50, targetCarbsG: 300, isYouth: true });
+    expect(youth.join(" ")).toContain("Wachstum");
+    const adult = buildRedsWarnings({ dayType: "rest", trainingMinutes: 0, loggedCarbsG: 50, targetCarbsG: 240, isYouth: false });
+    expect(adult.join(" ")).not.toContain("Wachstum");
   });
 });

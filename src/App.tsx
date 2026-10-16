@@ -18,6 +18,7 @@ export default function App() {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [mealLogs, setMealLogs] = useState<MealLog[]>([]);
   const [weightKg, setWeightKg] = useState(70);
+  const [birthYear, setBirthYear] = useState<number | "">("");
   const [selected, setSelected] = useState<TrainingSession | null>(null);
   const [status, setStatus] = useState("");
 
@@ -33,6 +34,8 @@ export default function App() {
     const logsRes = await supabase.from("meal_logs").select("*").order("created_at", { ascending: false }).limit(200);
     if (profileRes.data && profileRes.data.length > 0) {
       setWeightKg(Number(profileRes.data[0].body_weight_kg));
+      const by = profileRes.data[0].birth_year;
+      setBirthYear(by ? Number(by) : "");
     }
     if (sessionsRes.data) setSessions(sessionsRes.data as TrainingSession[]);
     if (logsRes.data) setMealLogs(logsRes.data as MealLog[]);
@@ -50,12 +53,13 @@ export default function App() {
     downloadCsv(buildSessionsCsv(sessions, weightKg), "fuelix-sessions.csv");
   };
 
-  const saveWeight = async () => {
+  const saveProfile = async () => {
+    const payload = { body_weight_kg: weightKg, birth_year: birthYear === "" ? null : Number(birthYear) };
     const existing = await supabase.from("profile").select("id").limit(1);
     if (existing.data && existing.data.length > 0) {
-      await supabase.from("profile").update({ body_weight_kg: weightKg }).eq("id", existing.data[0].id);
+      await supabase.from("profile").update(payload).eq("id", existing.data[0].id);
     } else {
-      await supabase.from("profile").insert({ body_weight_kg: weightKg });
+      await supabase.from("profile").insert(payload);
     }
     setStatus("Gespeichert.");
     setTimeout(() => setStatus(""), 2000);
@@ -97,7 +101,7 @@ export default function App() {
           </button>
         </div>
       </header>
-      <DaySummary sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} />
+      <DaySummary sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} />
       <div className="weight">
         <label htmlFor="weight">Koerpergewicht (kg): </label>
         <input
@@ -107,7 +111,17 @@ export default function App() {
           max="150"
           value={weightKg}
           onChange={(e) => setWeightKg(Number(e.target.value))}
-          onBlur={saveWeight}
+          onBlur={saveProfile}
+        />
+        <label htmlFor="birthyear">Geburtsjahr: </label>
+        <input
+          id="birthyear"
+          type="number"
+          min="1930"
+          max="2020"
+          value={birthYear}
+          onChange={(e) => setBirthYear(e.target.value === "" ? "" : Number(e.target.value))}
+          onBlur={saveProfile}
         />
         <span className="status">{status}</span>
       </div>

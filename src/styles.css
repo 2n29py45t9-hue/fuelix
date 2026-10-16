@@ -116,3 +116,9 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .tipbox { display: none; position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%); width: 240px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 8px 10px; font-size: 12px; font-weight: 400; color: #cbd5e1; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
 .tip:hover .tipbox, .tip:focus .tipbox { display: block; }
 .tipbox::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #334155; }
+/* Youth Mode & RED-S-Schutz (DUO-31) */
+.badge-youth { background: #4c1d95; color: #ddd6fe; }
+.reds { background: #1a1207; border-left: 3px solid #f59e0b; border-radius: 6px; padding: 8px 12px; margin-top: 12px; }
+.reds-title { font-size: 13px; font-weight: 600; color: #fbbf24; }
+.reds-list { margin: 6px 0 0; padding-left: 18px; }
+.reds-list li { font-size: 12px; color: #e2e8f0; margin-bottom: 4px; }

@@ -1,4 +1,4 @@
-import { buildCarbAmpel, calculateFuelingPlan, dayTypeFor, dayTypeLabel, restOfDayPhase } from "../lib/fueling";
+import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, isYouthAthlete, restOfDayPhase } from "../lib/fueling";
 import { localIso } from "../lib/date";
 import CarbAmpel from "./CarbAmpel";
 import Tip from "./Tip";
@@ -40,11 +40,13 @@ function Bar({ value, max, label, unit, explain }: { value: number; max: number;
 export default function DaySummary({
   sessions,
   weightKg,
-  mealLogs
+  mealLogs,
+  birthYear = ""
 }: {
   sessions: TrainingSession[];
   weightKg: number;
   mealLogs: MealLog[];
+  birthYear?: number | "";
 }) {
   const today = localIso();
   const todays = sessions.filter((s) => s.session_date === today);
@@ -58,12 +60,21 @@ export default function DaySummary({
       ? "moderate"
       : "low";
   const dayType = dayTypeFor(minutes, maxIntensity, longestSession ? longestSession.duration_min : 0);
-  const dailyCarbsPerKg = dayType === "rest" ? 4 : dayType === "load" ? 6 : 8;
-  const dailyTargetG = Math.round(weightKg * dailyCarbsPerKg);
-  const proteinTargetG = Math.round(weightKg * 1.6);
+
+  // Youth Mode (DUO-31): jugendspezifische Tagesziele und RED-S-Schutz
+  const ageYears = ageFromBirthYear(birthYear === "" ? null : birthYear);
+  const youth = isYouthAthlete(ageYears);
+  const targets = dailyTargetsFor(dayType, weightKg, youth);
+  const dailyCarbsPerKg = targets.carbsPerKg;
+  const dailyTargetG = targets.carbsG;
+  const proteinTargetG = targets.proteinG;
 
   const loggedCarbs = logsToday.reduce((sum, l) => sum + Number(l.carbs_g), 0);
   const loggedProtein = logsToday.reduce((sum, l) => sum + Number(l.protein_g), 0);
+
+  const warnings = logsToday.length > 0
+    ? buildRedsWarnings({ dayType, trainingMinutes: minutes, loggedCarbsG: loggedCarbs, targetCarbsG: dailyTargetG, isYouth: youth })
+    : [];
 
   const phases: CarbAmpelPhase[] = longestSession
     ? [
@@ -89,6 +100,18 @@ export default function DaySummary({
   const fluid = plans.reduce((sum, p) => sum + p.totalFluidMl, 0);
   const liters = (fluid / 1000).toFixed(1).replace(".", ",");
 
+  const glycogenTip = youth
+    ? "Füllstand der Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Jugend-Ziel – im Wachstum höher angesetzt (Ruhetag 5, Belastungstag 7, Wettkampftag 8 g/kg) und nie stark gedrosselt (RED-S-Schutz)."
+    : "Füllstand deiner Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Ziel – periodisiert nach Trainingsbelastung (Ruhetag 4, Belastungstag 6, Wettkampftag 8 g/kg).";
+
+  const carbsExplain = youth
+    ? "Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g. Jugend-Modus: höhere Ziele wegen Wachstum und RED-S-Schutz."
+    : "Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g. Das Ziel wechselt täglich mit der Belastung (Carb Coding).";
+
+  const proteinExplain = youth
+    ? "Protein-Ziel: ca. " + targets.proteinPerKg + " g pro kg Körpergewicht – im Jugend-Wachstum etwas höher, wichtig für Muskelaufbau, Knochen und Regeneration."
+    : "Protein-Ziel: ca. 1,6 g pro kg Körpergewicht für Muskelerhalt und Regeneration – auch am Ruhetag wichtig.";
+
   let nextStep: string;
   if (todays.length === 0) {
     nextStep = "Erfasse dein heutiges Training – danach erscheint dein Fueling-Plan.";
@@ -107,6 +130,7 @@ export default function DaySummary({
     <div className="card summary">
       <h2>
         Heute <span className={"badge badge-" + dayType}>{dayTypeLabel(dayType)}</span>
+        {youth ? <span className="badge badge-youth">Jugend U15-U19</span> : null}
       </h2>
       {todays.length === 0 ? (
         <p className="muted">Noch keine Einheiten heute – Zeit fuer Training.</p>
@@ -119,7 +143,7 @@ export default function DaySummary({
       <div className="glycogen">
         <div className="glycogen-head">
           <span className="glycogen-label">
-            Tagesenergie (KH) <Tip text="Füllstand deiner Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Ziel – periodisiert nach Trainingsbelastung (Ruhetag 4, Belastungstag 6, Wettkampftag 8 g/kg)." />
+            Tagesenergie (KH) <Tip text={glycogenTip} />
           </span>
           <span className="glycogen-pct">{dailyTargetG > 0 ? Math.min(100, Math.round((loggedCarbs / dailyTargetG) * 100)) : 0}%</span>
         </div>
@@ -137,14 +161,14 @@ export default function DaySummary({
           unit="g"
           value={loggedCarbs}
           max={dailyTargetG}
-          explain={"Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g. Das Ziel wechselt täglich mit der Belastung (Carb Coding)."}
+          explain={carbsExplain}
         />
         <Bar
           label="Protein"
           unit="g"
           value={loggedProtein}
           max={proteinTargetG}
-          explain="Protein-Ziel: ca. 1,6 g pro kg Körpergewicht für Muskelerhalt und Regeneration – auch am Ruhetag wichtig."
+          explain={proteinExplain}
         />
       </div>
 
@@ -164,6 +188,19 @@ export default function DaySummary({
           </div>
         )}
       </div>
+
+      {warnings.length > 0 && (
+        <div className="reds">
+          <span className="reds-title">
+            RED-S-Schutz <Tip text="RED-S = Relative Energy Deficiency in Sport: Die Energiezufuhr liegt dauerhaft unter dem Bedarf. Fuelix warnt früh, besonders bei Jugendlichen, weil Wachstum, Knochen und Hormonsystem hier am empfindlichsten reagieren." />
+          </span>
+          <ul className="reds-list">
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="nextstep">{nextStep}</div>
       <CarbAmpel phases={phases} />

@@ -276,3 +276,83 @@ export function buildRaceDayPlan(input: FuelingInput): RaceDayPhase[] {
     }
   ];
 }
+
+/*
+ * Youth Mode (DUO-31) - jugendspezifische Anpassungen (U15-U19):
+ * Heranwachsende Athleten brauchen im Wachstum mehr Energie und reagieren
+ * empfindlicher auf Energiedefizite (RED-S-Risiko). Kernprinzipien:
+ * - Ruhetage: keine harte KH-Reduktion (5 statt 4 g/kg)
+ * - Belastungs-/Renntage: staerkere KH-Betonung (7 bzw. 8 g/kg)
+ * - Protein: 1,7 g/kg im Wachstum (statt 1,6)
+ * - RED-S-Fruehwarnung, wenn die Zufuhr deutlich hinter dem Ziel zurueckbleibt
+ */
+export function ageFromBirthYear(birthYear: number | null | undefined, now?: Date): number | null {
+  if (birthYear === null || birthYear === undefined) return null;
+  const year = now ? now.getFullYear() : new Date().getFullYear();
+  if (!Number.isFinite(birthYear) || birthYear < 1900 || birthYear > year) return null;
+  return year - birthYear;
+}
+
+export function isYouthAthlete(ageYears: number | null | undefined): boolean {
+  return ageYears !== null && ageYears !== undefined && ageYears >= 13 && ageYears <= 19;
+}
+
+export function youthDailyCarbsPerKg(dayType: DayType): number {
+  if (dayType === "rest") return 5;
+  if (dayType === "race") return 8;
+  return 7;
+}
+
+export interface DailyTargets {
+  carbsPerKg: number;
+  carbsG: number;
+  proteinPerKg: number;
+  proteinG: number;
+}
+
+export function dailyTargetsFor(dayType: DayType, weightKg: number, isYouth: boolean): DailyTargets {
+  const carbsPerKg = isYouth
+    ? youthDailyCarbsPerKg(dayType)
+    : dayType === "rest" ? 4 : dayType === "load" ? 6 : 8;
+  const proteinPerKg = isYouth ? 1.7 : 1.6;
+  return {
+    carbsPerKg,
+    carbsG: Math.round(weightKg * carbsPerKg),
+    proteinPerKg,
+    proteinG: Math.round(weightKg * proteinPerKg)
+  };
+}
+
+export interface RedsCheckInput {
+  dayType: DayType;
+  trainingMinutes: number;
+  loggedCarbsG: number;
+  targetCarbsG: number;
+  isYouth: boolean;
+}
+
+export function buildRedsWarnings(input: RedsCheckInput): string[] {
+  const warnings: string[] = [];
+  if (input.targetCarbsG <= 0) return warnings;
+  const ratio = input.loggedCarbsG / input.targetCarbsG;
+
+  if (input.trainingMinutes >= 90 && ratio < 0.5) {
+    warnings.push(
+      "Lange Belastung mit zu wenig Energie: Bei " + input.trainingMinutes + " min Training liegen erst " +
+        Math.round(ratio * 100) + "% des KH-Ziels. Jetzt kohlenhydratreich nachladen – Regeneration, Immunsystem und die nächste Einheit hängen daran."
+    );
+  }
+  if (input.dayType === "rest" && ratio < 0.4) {
+    warnings.push(
+      "Ruhetag ist kein Fastentag: Der Körper braucht heute Energie für Regeneration" +
+        (input.isYouth ? " und Wachstum" : "") + ". Verteile mindestens " +
+        Math.round(input.targetCarbsG * 0.4) + " g KH über den Tag."
+    );
+  }
+  if (input.isYouth && ratio < 0.5 && input.trainingMinutes >= 60) {
+    warnings.push(
+      "Jugend-Athlet (U15-U19): Zu geringe Energiezufuhr erhöht das RED-S-Risiko – Wachstum, Knochenstärke, Hormonhaushalt und Leistung können leiden. Wenn du dein Ziel häufig nicht erreichst, sprich mit einem Arzt oder einer Ernährungsfachkraft."
+    );
+  }
+  return warnings;
+}
