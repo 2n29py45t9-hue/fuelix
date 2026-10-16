@@ -59,3 +59,12 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .quickadd input { flex: 1; }
 .quickadd input[type="number"] { flex: none; width: 90px; }
 .quickadd button { margin-top: 0; white-space: nowrap; }
+/* Race-Day-Wizard (DUO-29) */
+.wizard-controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+.wizard-controls .field { flex: 1; min-width: 180px; }
+.wizard-controls button { margin-top: 0; }
+.wizard-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 14px; }
+.phase { background: #0f172a; border-radius: 8px; padding: 10px 12px; }
+.phase h4 { margin: 0 0 2px; font-size: 14px; color: #4ade80; }
+.phase .window { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
+.phase ul { margin: 0; padding-left: 16px; font-size: 13px; }

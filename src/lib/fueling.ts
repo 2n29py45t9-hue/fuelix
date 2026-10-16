@@ -1,4 +1,4 @@
-import type { CarbAmpelPhase, DayType, FuelingPlan, Heat, Intensity } from "../types";
+import type { CarbAmpelPhase, DayType, FuelingPlan, Heat, Intensity, RaceDayPhase } from "../types";
 
 export interface FuelingInput {
   durationMin: number;
@@ -206,4 +206,73 @@ export function restOfDayPhase(dayType: DayType, weightKg: number): CarbAmpelPha
     carbsG: Math.round(weightKg * 6),
     explanation: "Belastungstag: ausgewogene KH-Zufuhr unterstuetzt die Trainingsanpassung und die naechste Einheit."
   };
+}
+
+/*
+ * Race-Day-Wizard (DUO-29):
+ * Schritt-fuer-Schritt-Renntagsplan aus einer geplanten Renn-Session,
+ * alle Empfehlungen stammen aus der Fueling-Engine.
+ */
+export function buildRaceDayPlan(input: FuelingInput): RaceDayPhase[] {
+  const plan = calculateFuelingPlan(input);
+  const kg = input.bodyWeightKg;
+
+  const duringItems: string[] = [
+    "Zielrate: " + plan.carbsPerHour + " g KH/h" + (plan.carbsPerHour >= 60 ? " (Glukose-Fruktose-Mix)" : ""),
+    "Trinkrate: ca. " + plan.fluidPerHour + " ml/h",
+    "Natrium: ca. " + plan.sodiumPerHour + " mg/h",
+    "Alle 15-20 min trinken, Gele auf 20-30 g Portionen verteilen"
+  ];
+  if (input.heat === "hot") {
+    duringItems.push("Hitze: Elektrolyt-Getraenk statt Wasser, alle 20 min 300-500 ml anstreben");
+  }
+
+  return [
+    {
+      key: "eve",
+      title: "Vorabend",
+      window: "18:00-21:00 am Tag zuvor",
+      items: [
+        "KH-reiches Abendessen: ca. " + Math.round(kg * 1.5) + " g KH (Reis, Nudeln, Kartoffeln)",
+        "Ueber den Tag ca. " + Math.round(kg * 35) + " ml trinken, Urin hell halten",
+        "Keine neuen Lebensmittel testen, Fett und Huesen moderat halten"
+      ]
+    },
+    {
+      key: "morning",
+      title: "Renntag-Morgen",
+      window: "3 h bis 30 min vor dem Start",
+      items: [
+        "Fruehstueck 3 h vorher: ca. " + plan.preCarbsG + " g KH",
+        "Bis 2 h vorher ca. " + plan.preFluidMl + " ml trinken",
+        "30 min vorher: kleiner KH-Snack (20-30 g) oder Schluck Iso-Getraenk"
+      ]
+    },
+    {
+      key: "prestart",
+      title: "Vor dem Start",
+      window: "letzte 15 min",
+      items: [
+        "Beide Flaschen voll: Zielrate " + plan.fluidPerHour + " ml/h",
+        "Gele und Riegel griffbereit: " + plan.carbsPerHour + " g KH/h",
+        "Optional: KH-Mundspuelung gegen Nervositaet"
+      ]
+    },
+    {
+      key: "during",
+      title: "Waehrend des Rennens",
+      window: input.durationMin + " min Renndauer",
+      items: duringItems
+    },
+    {
+      key: "after",
+      title: "Danach (Recovery)",
+      window: "0-60 min nach dem Ziel",
+      items: [
+        plan.postCarbsG + " g KH + " + plan.postProteinG + " g Protein (z. B. Recovery-Shake)",
+        "Ca. " + plan.postFluidMl + " ml Fluessigkeit (Schweissverlust ~" + plan.estimatedSweatL + " l)",
+        "Fettes und Alkohol erst nach dem 60-min-Fenster"
+      ]
+    }
+  ];
 }

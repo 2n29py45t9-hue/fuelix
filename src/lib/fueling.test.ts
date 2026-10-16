@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCarbAmpel, calculateFuelingPlan, dayTypeFor, dayTypeLabel, restOfDayPhase } from "./fueling";
+import { buildCarbAmpel, buildRaceDayPlan, calculateFuelingPlan, dayTypeFor, dayTypeLabel, restOfDayPhase } from "./fueling";
 
 const input = (durationMin: number, intensity: "low" | "moderate" | "high", heat: "normal" | "hot", bodyWeightKg: number) =>
   calculateFuelingPlan({ durationMin, intensity, heat, bodyWeightKg });
@@ -87,5 +87,27 @@ describe("Carb-Coding-Ampel (DUO-28)", () => {
     expect(ampel.find((p) => p.key === "during")?.color).toBe("green");
     expect(ampel.find((p) => p.key === "post")?.color).toBe("green");
     ampel.forEach((p) => expect(p.explanation.length).toBeGreaterThan(10));
+  });
+});
+
+describe("Race-Day-Wizard (DUO-29)", () => {
+  it("erzeugt fuenf Phasen in richtiger Reihenfolge", () => {
+    const plan = buildRaceDayPlan({ durationMin: 150, intensity: "high", heat: "normal", bodyWeightKg: 70 });
+    expect(plan.map((p) => p.key)).toEqual(["eve", "morning", "prestart", "during", "after"]);
+  });
+
+  it("Waehrend-Phase kennt Zielraten aus der Engine", () => {
+    const plan = buildRaceDayPlan({ durationMin: 150, intensity: "high", heat: "normal", bodyWeightKg: 70 });
+    const during = plan.find((p) => p.key === "during");
+    expect(during?.items.join(" ")).toContain("90 g KH/h");
+    expect(during?.items.join(" ")).toContain("Glukose-Fruktose-Mix");
+  });
+
+  it("Hitze ergaennt Elektrolyt-Hinweis, Recovery enthaelt Protein", () => {
+    const plan = buildRaceDayPlan({ durationMin: 120, intensity: "high", heat: "hot", bodyWeightKg: 70 });
+    const during = plan.find((p) => p.key === "during");
+    expect(during?.items.join(" ")).toContain("Elektrolyt-Getraenk");
+    const after = plan.find((p) => p.key === "after");
+    expect(after?.items.join(" ")).toContain("Protein");
   });
 });

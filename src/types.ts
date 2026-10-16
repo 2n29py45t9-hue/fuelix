@@ -69,3 +69,11 @@ export interface MealLog {
   logged_ms?: number | null;
   created_at?: string;
 }
+
+// Race-Day-Wizard (DUO-29)
+export interface RaceDayPhase {
+  key: string;
+  title: string;
+  window: string;
+  items: string[];
+}

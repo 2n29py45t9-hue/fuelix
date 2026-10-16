@@ -11,6 +11,7 @@ import SessionList from "./components/SessionList";
 import DaySummary from "./components/DaySummary";
 import WeekView from "./components/WeekView";
 import QuickLog from "./components/QuickLog";
+import RaceDayWizard from "./components/RaceDayWizard";
 
 export default function App() {
   const [authSession, setAuthSession] = useState<SupabaseSession | null>(null);
@@ -120,6 +121,7 @@ export default function App() {
         <PlanCard session={selected} plan={plan} ampel={ampel} />
       </main>
       <QuickLog onLogged={load} />
+      <RaceDayWizard sessions={sessions} weightKg={weightKg} />
       <WeekView sessions={sessions} weightKg={weightKg} />
       <SessionList sessions={sessions} onSelect={setSelected} onChanged={load} />
     </div>
