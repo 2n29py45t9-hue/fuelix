@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase } from "../lib/fueling";
-import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM, weekdayIndexMondayFirst } from "../lib/date";
-import { slotsForWeekday } from "../lib/mealSchedule";
+import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, type MealSlotPlan } from "../lib/fueling";
+import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM } from "../lib/date";
+import { slotsForDate } from "../lib/mealSchedule";
 import CarbAmpel from "./CarbAmpel";
 import Tip from "./Tip";
-import type { CarbAmpelPhase, MealLog, MealPhase, MealSlot, TrainingSession } from "../types";
+import type { CarbAmpelPhase, MealLog, MealOverride, MealPhase, MealSlot, TrainingSession } from "../types";
 
 const phaseText: Record<MealPhase, string> = {
   pre: "Vor der Einheit",
@@ -36,7 +36,8 @@ function Bar({ value, max, label, unit, explain }: { value: number; max: number;
 
 type FeedItem =
   | { kind: "meal"; time: string; log: MealLog }
-  | { kind: "session"; time: string; session: TrainingSession };
+  | { kind: "session"; time: string; session: TrainingSession }
+  | { kind: "slot"; time: string; slot: MealSlotPlan };
 
 function SessionDrawer({ session, weightKg, onOpenPlan }: { session: TrainingSession; weightKg: number; onOpenPlan: () => void }) {
   const plan = calculateFuelingPlan({
@@ -64,6 +65,7 @@ export default function DaySummary({
   mealLogs,
   birthYear = "",
   mealSchedule = [],
+  overrides = [],
   onSelectSession
 }: {
   date: string;
@@ -72,6 +74,7 @@ export default function DaySummary({
   mealLogs: MealLog[];
   birthYear?: number | "";
   mealSchedule?: MealSlot[];
+  overrides?: MealOverride[];
   onSelectSession: (s: TrainingSession) => void;
 }) {
   const [openSession, setOpenSession] = useState<string | null>(null);
@@ -157,10 +160,11 @@ export default function DaySummary({
   const fluid = plans.reduce((sum, p) => sum + p.totalFluidMl, 0);
   const liters = (fluid / 1000).toFixed(1).replace(".", ",");
 
-  // Mahlzeiten-Periodisierung (DUO-35): Raster des Wochentags gegen das
-  // Training periodisieren und – Hexis-Reallocation-Prinzip – nach den
-  // bisherigen Logs neu berechnen. Der naechste Anlass zeigt das angepasste Ziel.
-  const daySlots = mealSchedule.length > 0 ? slotsForWeekday(mealSchedule, weekdayIndexMondayFirst(date)) : [];
+  // Mahlzeiten-Periodisierung (DUO-35 + DUO-36): effektive Anlässe des
+  // Tages = Override fuer dieses Datum, sonst Wochentags-Routine. Gegen
+  // das Training periodisieren und – Hexis-Reallocation-Prinzip – nach
+  // den bisherigen Logs neu berechnen.
+  const daySlots = mealSchedule.length > 0 || overrides.length > 0 ? slotsForDate(mealSchedule, overrides, date) : [];
   const mealPlan = daySlots.length > 0
     ? mealPlanFor({
         slots: daySlots,
@@ -178,9 +182,11 @@ export default function DaySummary({
   const originalNext = nextSlot && mealPlan ? mealPlan.slots.find((s) => s.time === nextSlot.time) : null;
   const nextChanged = !!(nextSlot && originalNext && originalNext.carbsG !== nextSlot.carbsG);
 
-  // Timeline-Feed (DUO-32): Mahlzeiten und Einheiten chronologisch gemischt,
-  // Tiles nach Fueling-Phase farbcodiert (Carb Coding statt Mahlzeitentyp).
+  // Timeline-Feed (DUO-32 + DUO-36): geplante Anlässe aus der Routine
+  // (gestrichelt, mit Ziel), ALLE geloggten Mahlzeiten und Snacks sowie
+  // Einheiten - chronologisch gemischt, damit der Überblick stimmt.
   const feed: FeedItem[] = [
+    ...(mealPlan ? mealPlan.slots.map((s) => ({ kind: "slot" as const, time: s.time, slot: s })) : []),
     ...logsToday.map((l) => ({ kind: "meal" as const, time: hhmmFromIso(l.created_at), log: l })),
     ...todays.map((s) => ({ kind: "session" as const, time: s.session_start || "", session: s }))
   ].sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
@@ -284,14 +290,24 @@ export default function DaySummary({
 
       <div className="timeline">
         <span className="timeline-title">
-          Timeline <Tip text="Farbliche Zuordnung nach Fueling-Phase: Blau = vor der Einheit, Gelb = während, Grün = danach (Regeneration), Grau = Snack/sonstige – nach dem Fuelin-Prinzip farbcodierter Mahlzeiten. Zeiten zeigen, wann geloggt bzw. wann die Einheit geplant ist." />
+          Timeline <Tip text="Dein Tag im Überblick: gestrichelte Kacheln sind geplante Anlässe aus deiner Routine mit ihrem Ziel (Farbe = KH-Betonung), ausgefüllte Kacheln alles, was du geloggt hast – auch jeder zusätzliche Snack. Farben der Logs nach Fueling-Phase: Blau = vor der Einheit, Gelb = während, Grün = danach, Grau = Snack/sonstige." />
         </span>
         {feed.length === 0 ? (
           <span className="muted timeline-empty">Noch nichts an diesem Tag – tippe unten auf + zum Loggen.</span>
         ) : (
           <div className="feed">
             {feed.map((f, i) =>
-              f.kind === "meal" ? (
+              f.kind === "slot" ? (
+                <div className="feedrow" key={"p" + i + f.slot.time}>
+                  <span className="feedtime">{f.slot.time}</span>
+                  <div className="slottile">
+                    <span className={"calslot-dot " + f.slot.color} />
+                    <span className="tile-name">{f.slot.label}</span>
+                    <span className="slottile-target">Ziel ≈ {f.slot.carbsG} g KH · {f.slot.proteinG} g P</span>
+                    <Tip text={f.slot.explanation !== "" ? f.slot.explanation : "Geplanter Anlass aus deiner Routine – periodisiert gegen dein Training."} />
+                  </div>
+                </div>
+              ) : f.kind === "meal" ? (
                 <div className="feedrow" key={"m" + i}>
                   <span className="feedtime">{f.time}</span>
                   <div className={"mealtile tile-" + f.log.phase}>

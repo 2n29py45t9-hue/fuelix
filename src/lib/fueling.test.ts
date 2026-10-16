@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { intensityFromStrava, mapActivityToSession, sportFromStrava, type StravaActivity } from "./stravaMap";
 import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, inferLogPhase, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, youthDailyCarbsPerKg } from "./fueling";
+import { overridesForDate, slotsForDate } from "./schedule";
+import type { MealOverride, MealSlot } from "../types";
 
 const input = (durationMin: number, intensity: "low" | "moderate" | "high", heat: "normal" | "hot", bodyWeightKg: number) =>
   calculateFuelingPlan({ durationMin, intensity, heat, bodyWeightKg });
@@ -325,5 +327,40 @@ describe("Strava-Mapping (DUO-23)", () => {
     const s = mapActivityToSession(activity({}));
     expect(s.session_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(s.session_start).toMatch(/^\d{2}:\d{2}$/);
+  });
+});
+
+describe("Kalender: Routine vs. Einzeltermin (DUO-36)", () => {
+  // Routine fuer Freitag (weekday 4): Fruehstück 07:00 + Mittagessen 12:30.
+  const routine: MealSlot[] = [
+    { id: "r1", weekday: 4, time: "07:00", label: "Frühstück", primary_meal: true },
+    { id: "r2", weekday: 4, time: "12:30", label: "Mittagessen", primary_meal: true }
+  ];
+  // Override fuer den 2026-10-16 (ein Freitag): Wettkampf-Frühstück + Pre-Race-Snack.
+  const ovs: MealOverride[] = [
+    { id: "o1", date: "2026-10-16", time: "11:00", label: "Pre-Race-Snack", primary_meal: false },
+    { id: "o2", date: "2026-10-16", time: "08:00", label: "Rennfrühstück", primary_meal: true }
+  ];
+
+  it("Override gewinnt fuer sein Datum", () => {
+    const slots = slotsForDate(routine, ovs, "2026-10-16");
+    expect(slots.map((s) => s.label)).toEqual(["Rennfrühstück", "Pre-Race-Snack"]);
+    expect(slots[0].time).toBe("08:00");
+    expect(slots[0].primary).toBe(true);
+    expect(slots[1].primary).toBe(false);
+  });
+
+  it("ohne Override gilt die Routine des Wochentags (gleicher Wochentag, anderes Datum)", () => {
+    const slots = slotsForDate(routine, ovs, "2026-10-23");
+    expect(slots.map((s) => s.label)).toEqual(["Frühstück", "Mittagessen"]);
+  });
+
+  it("anderer Wochentag ohne Routine: leer", () => {
+    expect(slotsForDate(routine, ovs, "2026-10-17")).toEqual([]);
+  });
+
+  it("overridesForDate sortiert nach Uhrzeit", () => {
+    const sorted = overridesForDate(ovs, "2026-10-16");
+    expect(sorted.map((s) => s.time)).toEqual(["08:00", "11:00"]);
   });
 });

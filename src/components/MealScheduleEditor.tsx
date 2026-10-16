@@ -68,7 +68,8 @@ export default function MealScheduleEditor({
         ))}
       </div>
       <p className="muted mse-hint">
-        {WEEKDAY_LONG[day]} – wann isst du normalerweise? Jeder Tag ist einzeln einstellbar.
+        {WEEKDAY_LONG[day]} – wann isst du normalerweise? Deine Routine gilt für jede Woche; abweichende einzelne
+        Tage änderst du direkt im Kalender.
       </p>
       <div className="mse-rows">
         {current.map((m, i) => (

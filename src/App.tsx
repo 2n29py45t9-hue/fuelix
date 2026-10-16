@@ -4,7 +4,7 @@ import { supabase } from "./lib/supabase";
 import { buildCarbAmpel, calculateFuelingPlan, inferLogPhase } from "./lib/fueling";
 import { buildSessionsCsv, downloadCsv } from "./lib/csv";
 import { hhmmNow, localIso } from "./lib/date";
-import type { FuelingPlan, MealLog, MealSlot, TrainingSession } from "./types";
+import type { FuelingPlan, MealLog, MealOverride, MealSlot, TrainingSession } from "./types";
 import Auth from "./components/Auth";
 import SessionForm from "./components/SessionForm";
 import PlanCard from "./components/PlanCard";
@@ -27,6 +27,7 @@ export default function App() {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [mealLogs, setMealLogs] = useState<MealLog[]>([]);
   const [mealSchedule, setMealSchedule] = useState<MealSlot[]>([]);
+  const [mealOverrides, setMealOverrides] = useState<MealOverride[]>([]);
   const [weightKg, setWeightKg] = useState(70);
   const [birthYear, setBirthYear] = useState<number | "">("");
   const [mainSport, setMainSport] = useState("Radsport");
@@ -54,6 +55,8 @@ export default function App() {
     const sessionsRes = await supabase.from("sessions").select("*").order("session_date", { ascending: false }).limit(100);
     const logsRes = await supabase.from("meal_logs").select("*").order("created_at", { ascending: false }).limit(200);
     const scheduleRes = await supabase.from("meal_schedule").select("*").order("weekday", { ascending: true }).order("time", { ascending: true });
+    // DUO-36: Einzeltermin-Abweichungen der Routine.
+    const overridesRes = await supabase.from("meal_overrides").select("*").order("date", { ascending: true }).order("time", { ascending: true });
     if (profileRes.data && profileRes.data.length > 0) {
       setWeightKg(Number(profileRes.data[0].body_weight_kg));
       const by = profileRes.data[0].birth_year;
@@ -67,6 +70,7 @@ export default function App() {
     if (sessionsRes.data) setSessions(sessionsRes.data as TrainingSession[]);
     if (logsRes.data) setMealLogs(logsRes.data as MealLog[]);
     if (scheduleRes.data) setMealSchedule(scheduleRes.data as MealSlot[]);
+    if (overridesRes.data) setMealOverrides(overridesRes.data as MealOverride[]);
   }, []);
 
   useEffect(() => {
@@ -162,7 +166,7 @@ export default function App() {
         {activeTab === "plan" ? (
           <>
             <DayScroller selected={selectedDate} onSelect={setSelectedDate} sessions={sessions} />
-            <DaySummary date={selectedDate} sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} mealSchedule={mealSchedule} onSelectSession={showSession} />
+            <DaySummary date={selectedDate} sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} mealSchedule={mealSchedule} overrides={mealOverrides} onSelectSession={showSession} />
             <div className="grid">
               <SessionForm
                 defaultSport={mainSport}
@@ -186,11 +190,13 @@ export default function App() {
               setSelectedDate(iso);
               setActiveTab("plan");
             }}
+            onSelectSession={showSession}
             sessions={sessions}
             weightKg={weightKg}
             birthYear={birthYear}
             mealSchedule={mealSchedule}
-            onScheduleSaved={load}
+            overrides={mealOverrides}
+            onSaved={load}
           />
         ) : null}
         {activeTab === "trends" ? (

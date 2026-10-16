@@ -148,8 +148,10 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           <div className="ob-step">
             <h2>Dein Tagesablauf</h2>
             <p>
-              Wann und wie oft isst du normalerweise? Darauf verteilen wir später deine Tagesziele – pro Anlass und
-              gegen dein Training periodisiert. Jeder Wochentag ist einzeln einstellbar.
+              Wann und wie oft isst du normalerweise? Das ist deine Routine – sie gilt automatisch für jede Woche,
+              du musst sie nicht immer wieder angeben. Darauf verteilen wir deine Tagesziele, pro Anlass und gegen
+              dein Training periodisiert. Abweichende Tage (Wettkampf, Reisen) passt du später im Kalender an –
+              nur für dieses Datum oder ab sofort für jede Wiederholung.
             </p>
             <MealScheduleEditor initial={raster} onChange={setRaster} embedded />
             <div className="ob-actions">
@@ -168,8 +170,9 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             </p>
             <p>
               So geht's weiter: Über das Plus unten erfassest du Mahlzeiten in unter 3 Sekunden – der Anlass wird
-              automatisch erkannt. Im Kalender-Tab siehst du deine Woche mit den vorgeschlagenen Zielen pro Mahlzeit,
-              im Plan-Tab legst du Trainingseinheiten an und bekommst deinen Fueling-Plan.
+              automatisch erkannt. Im Kalender siehst du deine drei Tage im Stundenraster, Mahlzeiten und Trainings
+              nebeneinander – jede Mahlzeit mit ihrem periodisierten Ziel, jeden Tag anpassbar. Im Plan-Tab legst
+              du Trainingseinheiten an und bekommst deinen Fueling-Plan.
             </p>
             <button type="button" onClick={() => finish(false)} disabled={busy}>
               {busy ? "Speichere ..." : "Fuelix starten"}

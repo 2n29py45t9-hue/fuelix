@@ -82,6 +82,16 @@ export interface RaceDayPhase {
 
 // Mahlzeiten-Raster (DUO-35): einer Nutzerin/einem Nutzer pro Wochentag,
 // weekday 0 = Montag ... 6 = Sonntag.
+// DUO-36: Abweichung des Rasters fuer genau ein Datum (Notion: "nur dieses Datum").
+export interface MealOverride {
+  id: string;
+  date: string;
+  time: string;
+  label: string;
+  primary_meal: boolean;
+  created_at?: string;
+}
+
 export interface MealSlot {
   id: string;
   weekday: number;
