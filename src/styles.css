@@ -1,0 +1,25 @@
+* { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+body { margin: 0; background: #0f172a; color: #e2e8f0; }
+.app { max-width: 960px; margin: 0 auto; padding: 24px; }
+header h1 { margin: 0; font-size: 28px; }
+header p { margin: 4px 0 20px; color: #94a3b8; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+.card { background: #1e293b; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+.card h2 { margin-top: 0; font-size: 18px; }
+label { display: block; margin: 10px 0 4px; font-size: 13px; color: #94a3b8; }
+input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: inherit; }
+button { margin-top: 12px; padding: 8px 14px; border: 0; border-radius: 8px; background: #22c55e; color: #052e16; font-weight: 600; cursor: pointer; }
+button:hover { filter: brightness(1.1); }
+button.danger { background: #7f1d1d; color: #fecaca; margin-left: 6px; }
+.error { color: #f87171; }
+.muted { color: #94a3b8; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
+.weight { margin: 8px 0 16px; display: flex; align-items: center; gap: 8px; }
+.weight input { width: 90px; }
+.weight label { margin: 0; }
+.status { color: #4ade80; font-size: 13px; }
+.plan ul { padding-left: 18px; margin: 6px 0; }
+.plan h3 { font-size: 14px; margin: 14px 0 2px; color: #4ade80; }
+.strategy { background: #0f172a; border-radius: 8px; padding: 10px; font-size: 14px; }
