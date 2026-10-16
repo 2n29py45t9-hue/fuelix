@@ -66,11 +66,26 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .wizard-controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
 .wizard-controls .field { flex: 1; min-width: 180px; }
 .wizard-controls button { margin-top: 0; }
-.wizard-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 14px; }
-.phase { background: #0f172a; border-radius: 8px; padding: 10px 12px; }
-.phase h4 { margin: 0 0 2px; font-size: 14px; color: #4ade80; }
-.phase .window { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
-.phase ul { margin: 0; padding-left: 16px; font-size: 13px; }
+/* Race-Day-Stepper (UI-Upgrade #4) */
+.stepper-head { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.stepper-count { font-size: 13px; color: #cbd5e1; font-weight: 600; }
+.stepper-track { margin: 10px 0; }
+.stepnav { display: flex; gap: 8px; margin-bottom: 12px; }
+.stepdot { width: 26px; height: 26px; border-radius: 999px; background: #334155; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.stepdot.active { background: #22c55e; color: #052e16; }
+.stepdot.done { background: #14532d; color: #bbf7d0; }
+.stepcard { background: #0f172a; border-radius: 8px; padding: 14px 16px; }
+.stepcard h4 { margin: 0 0 2px; font-size: 15px; color: #4ade80; }
+.stepcard .window { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
+.checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.checklist li:hover { background: #1e293b; }
+.checklist li.checked span:last-child { text-decoration: line-through; color: #64748b; }
+.checkbox { flex: none; width: 18px; height: 18px; border-radius: 5px; border: 1px solid #475569; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #4ade80; margin-top: 1px; }
+.checklist li.checked .checkbox { background: #14532d; border-color: #22c55e; }
+.stepper-actions { display: flex; gap: 10px; justify-content: space-between; }
+.stepper-actions button { margin-top: 0; }
+.stepper-hint { margin-top: 10px; }
 /* Heute-Screen-Kommandozentrale (UI-Upgrade) */
 .glycogen { margin: 14px 0 6px; }
 .glycogen-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
