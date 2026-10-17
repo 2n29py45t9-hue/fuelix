@@ -3,7 +3,7 @@ h1, h2, h3, .ds-month, .tile-name { font-family: "Space Grotesk", "Inter", syste
 body { margin: 0; background: #0f172a; color: #e2e8f0; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
 .app { max-width: 960px; margin: 0 auto; }
 
-/* ===== Spacing-Audit (DUO-35): einheitliche Variablen und Abstände ===== */
+/* ===== Spacing-Audit (DUO-35): einheitliche Variablen und AbstÃ¤nde ===== */
 :root {
   --gap-1: 8px;
   --gap-2: 12px;
@@ -205,7 +205,7 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .realloc-value { color: #4ade80; font-weight: 700; font-family: "JetBrains Mono", monospace; }
 /* Kalender-Tab */
 .cal .card .muted { margin: 6px 0 2px; font-size: 13px; }
-/* Farbdots für Carb Coding (Kalender-Chips + Timeline-Kacheln) */
+/* Farbdots fÃ¼r Carb Coding (Kalender-Chips + Timeline-Kacheln) */
 .calslot-dot { flex: none; width: 10px; height: 10px; border-radius: 999px; }
 .calslot-dot.green { background: #4ade80; }
 .calslot-dot.yellow { background: #fbbf24; }
@@ -240,7 +240,7 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .calev-dot.red { background: #f87171; }
 .calev-label { color: #e2e8f0; font-weight: 600; }
 .calev-target { color: #cbd5e1; font-family: "JetBrains Mono", monospace; font-size: 10px; margin-left: auto; }
-/* Timeline: geplante Anlässe (Routine/Override) als gestrichelte Kacheln */
+/* Timeline: geplante AnlÃ¤sse (Routine/Override) als gestrichelte Kacheln */
 .slottile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed #475569; border-radius: var(--radius-inner); font-size: 13px; color: #e2e8f0; }
 .slottile-target { color: #cbd5e1; font-size: 12px; font-family: "JetBrains Mono", monospace; }
 .slottile-link { font-size: 11px; font-weight: 600; color: #93c5fd; background: rgba(59, 130, 246, 0.15); border-radius: 999px; padding: 2px 8px; }
@@ -384,3 +384,23 @@ button.mealtile:hover { filter: brightness(1.18); }
 .mlg-form-macros input { width: 100%; }
 .mlg-actions { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
 .mlg-actions .link { margin-top: 0; }
+
+
+/* ===== Evidenz-Update Okt 2026: Woche als Kontrolleinheit ===== */
+/* Forschungsbefund: Der Einzelntag ist eine Naeherung (20-30 % Fehler
+ * bei Selbst-Reports), die 7-Tage-Summe gegen die Tagesziele ist die
+ * ehrliche Metrik. Tages-Chips bewerten daher nur gruen/amber/grau -
+ * rot gibt es ausschliesslich auf Wochen-Ebene (< 65 %), wo es
+ * RED-S-relevant wird. */
+.weekampel { background: #0f172a; border-radius: var(--radius-inner); padding: 10px 12px; margin: 6px 0 4px; }
+.weekampel-title { font-size: 13px; font-weight: 700; color: #cbd5e1; }
+.weekampel .track { margin: 8px 0 6px; }
+.weekampel-meta { font-size: 12px; color: #94a3b8; font-family: "JetBrains Mono", monospace; }
+.weekampel-days { display: flex; gap: 6px; margin-top: 10px; }
+.weekampel-day { flex: 1; display: flex; flex-direction: column; gap: 3px; align-items: center; font-size: 10px; color: #64748b; font-family: "JetBrains Mono", monospace; }
+.weekampel-day .wd-bar { min-height: 6px; max-width: 100%; height: 6px; border-radius: 999px; background: #263346; }
+.weekampel-day .wd-bar.ok { background: #4ade80; }
+.weekampel-day .wd-bar.mid { background: #fbbf24; }
+.weekampel-day .wd-bar.low { background: #64748b; }
+/* Slot-Status "ueber dem Ziel": neutral-amber statt rot (Evidenz-Update) */
+.slottile.over { border-style: solid; border-color: #fbbf24; background: rgba(251, 191, 36, 0.06); }

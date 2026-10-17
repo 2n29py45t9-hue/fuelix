@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, sessionFuelingCheckpoints, type FuelingCheckpoint, type MealSlotPlan } from "../lib/fueling";
-import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM } from "../lib/date";
-import { slotsForDate } from "../lib/mealSchedule";
+import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, mealPlanFor, reallocateMealPlan, slotCarbStatus, restOfDayPhase, sessionFuelingCheckpoints, type FuelingCheckpoint, type MealSlotPlan } from "../lib/fueling";
+import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM, weekdayIndexMondayFirst } from "../lib/date";
+import { slotsForDate, WEEKDAY_SHORT } from "../lib/mealSchedule";
 import Tip from "./Tip";
 import type { CarbAmpelPhase, MealLog, MealOverride, MealPhase, MealSlot, TrainingSession } from "../types";
 
@@ -17,7 +17,7 @@ import type { CarbAmpelPhase, MealLog, MealOverride, MealPhase, MealSlot, Traini
 
 const phaseText: Record<MealPhase, string> = {
   pre: "Vor der Einheit",
-  during: "Während",
+  during: "WÃ¤hrend",
   post: "Danach",
   snack: "Snack"
 };
@@ -76,7 +76,7 @@ function SessionDrawer({ session, weightKg, onOpenPlan }: { session: TrainingSes
   return (
     <div className="drawer">
       <div className="drawer-facts">
-        <span className="drawer-chip">{plan.carbsPerHour} g KH/h während</span>
+        <span className="drawer-chip">{plan.carbsPerHour} g KH/h wÃ¤hrend</span>
         <span className="drawer-chip">{plan.fluidPerHour} ml/h trinken</span>
         <span className="drawer-chip">{plan.postCarbsG} g KH + {plan.postProteinG} g Protein danach</span>
       </div>
@@ -155,10 +155,10 @@ export default function DaySummary({
   if (isToday && logsToday.length > 0 && nowHour >= 17 && balance.level !== "ok") {
     warnings.push(
       "Energiebilanz am Abend: erst " + balance.pct + "% des Tagesbedarfs (ca. " + balance.loggedKcal + " von " + balance.targetKcal + " kcal)" +
-        (youth ? " – im Wachstum darf die Bilanz nicht ins Minus laufen (RED-S-Schutz)." : " – jetzt noch eine kohlenhydratreiche Mahlzeit für die Regeneration.")
+        (youth ? " â im Wachstum darf die Bilanz nicht ins Minus laufen (RED-S-Schutz)." : " â jetzt noch eine kohlenhydratreiche Mahlzeit fÃ¼r die Regeneration.")
     );
   }
-  // Abend-Prompt (DUO-35): das Abendfenster ist die häufigste unloggierte Lücke.
+  // Abend-Prompt (DUO-35): das Abendfenster ist die hÃ¤ufigste unloggierte LÃ¼cke.
   if (isToday && nowHour >= 20 && logsToday.length > 0) {
     const lastLogHour = logsToday.reduce((max, l) => {
       const t = hhmmFromIso(l.created_at);
@@ -166,7 +166,7 @@ export default function DaySummary({
     }, -1);
     if (lastLogHour < 19) {
       warnings.push(
-        "Abend-Check: Nach 19 Uhr ist heute nichts mehr geloggt. Der Abend ist die häufigste Lücke – erfasse deinen letzten Snack, damit die Tagesbilanz stimmt."
+        "Abend-Check: Nach 19 Uhr ist heute nichts mehr geloggt. Der Abend ist die hÃ¤ufigste LÃ¼cke â erfasse deinen letzten Snack, damit die Tagesbilanz stimmt."
       );
     }
   }
@@ -197,9 +197,9 @@ export default function DaySummary({
   const fluid = plans.reduce((sum, p) => sum + p.totalFluidMl, 0);
   const liters = (fluid / 1000).toFixed(1).replace(".", ",");
 
-  // Mahlzeiten-Periodisierung (DUO-35 + DUO-36): effektive Anlässe des
+  // Mahlzeiten-Periodisierung (DUO-35 + DUO-36): effektive AnlÃ¤sse des
   // Tages = Override fuer dieses Datum, sonst Wochentags-Routine. Gegen
-  // das Training periodisieren und – Hexis-Reallocation-Prinzip – nach
+  // das Training periodisieren und â Hexis-Reallocation-Prinzip â nach
   // den bisherigen Logs neu berechnen.
   const daySlots = mealSchedule.length > 0 || overrides.length > 0 ? slotsForDate(mealSchedule, overrides, date) : [];
   const mealPlan = daySlots.length > 0
@@ -212,16 +212,16 @@ export default function DaySummary({
       })
     : null;
   const nowHhmm = hhmmNow();
-  const reallocPlan = mealPlan && isToday ? reallocateMealPlan(mealPlan, loggedCarbs, nowHhmm) : null;
+  const reallocPlan = mealPlan && isToday ? reallocateMealPlan(mealPlan, loggedCarbs, nowHhmm, { weightKg, isYouth: youth }) : null;
   const nextSlot = reallocPlan
     ? reallocPlan.slots.find((s) => minutesFromHHMM(s.time) > minutesFromHHMM(nowHhmm))
     : null;
   const originalNext = nextSlot && mealPlan ? mealPlan.slots.find((s) => s.time === nextSlot.time) : null;
   const nextChanged = !!(nextSlot && originalNext && originalNext.carbsG !== nextSlot.carbsG);
 
-  // Timeline-Feed (DUO-32 + DUO-36): geplante Anlässe aus der Routine
+  // Timeline-Feed (DUO-32 + DUO-36): geplante AnlÃ¤sse aus der Routine
   // (gestrichelt, mit Ziel), ALLE geloggten Mahlzeiten und Snacks sowie
-  // Einheiten - chronologisch gemischt, damit der Überblick stimmt.
+  // Einheiten - chronologisch gemischt, damit der Ãberblick stimmt.
   // Fueling-Plan in die Timeline (DUO-37): pro geplanter Einheit die
   // Fueling-Fenster Vor / Waehrend / Danach als eigene Kacheln mit
   // konkreter Uhrzeit und Ziel. Uebernimmt eine Mahlzeit aus dem Raster
@@ -260,13 +260,15 @@ export default function DaySummary({
   for (const l of logsToday) {
     if (l.slot_time) slotLogs.set(l.slot_time, l);
   }
-  /* Status eines Anlasses: abgehakt bei +-10 % des KH-Ziels. */
+  /* Status eines Anlasses: abgehakt bei â10 % bis +20 % des KH-Ziels
+   * (asymmetrische Toleranz, Evidenz-Update Okt 2026 - Ueberschuss ist
+   * bei Kohlenhydraten akut unkritisch). */
   const slotState = (slot: MealSlotPlan) => {
     const log = slotLogs.get(slot.time);
-    if (!log) return { logged: null as number | null, done: false };
+    if (!log) return { logged: null as number | null, done: false, over: false };
     const loggedCarbs = Number(log.carbs_g);
-    const done = slot.carbsG > 0 && loggedCarbs >= slot.carbsG * 0.9 && loggedCarbs <= slot.carbsG * 1.1;
-    return { logged: loggedCarbs, done };
+    const st = slotCarbStatus(slot.carbsG, loggedCarbs);
+    return { logged: loggedCarbs, done: st.done, over: st.over };
   };
   /* Reallocation: wenn was fehlt, zeigen spaetere Anlaesse das neu
    * berechnete Ziel (aus reallocPlan, gleiche Hexis-Logik wie der
@@ -284,18 +286,18 @@ export default function DaySummary({
 
   // DUO-38: Ring-Texte - altes Erklaerwissen bleibt als Tip erhalten.
   const carbRingExplain = (youth
-    ? "Füllstand der Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Jugend-Ziel – im Wachstum höher angesetzt (Ruhetag 5, Belastungstag 7, Wettkampftag 8 g/kg) und nie stark gedrosselt (RED-S-Schutz). "
-    : "Füllstand deiner Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Ziel – periodisiert nach Trainingsbelastung (Ruhetag 4, Belastungstag 6, Wettkampftag 8 g/kg). ") +
-    "Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g.";
+    ? "FÃ¼llstand der Glykogenspeicher: gegessene Kohlenhydrate im VerhÃ¤ltnis zum heutigen Jugend-Ziel â im Wachstum hÃ¶her angesetzt (Ruhetag 5, Belastungstag 7, Wettkampftag 8 g/kg) und nie stark gedrosselt (RED-S-Schutz). "
+    : "FÃ¼llstand deiner Glykogenspeicher: gegessene Kohlenhydrate im VerhÃ¤ltnis zum heutigen Ziel â periodisiert nach Trainingsbelastung (Ruhetag 4, Belastungstag 6, Wettkampftag 8 g/kg). ") +
+    "Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg KÃ¶rpergewicht â hochgerechnet auf " + dailyTargetG + " g.";
 
   const proteinExplain = youth
-    ? "Protein-Ziel: ca. " + targets.proteinPerKg + " g pro kg Körpergewicht – im Jugend-Wachstum etwas höher, wichtig für Muskelaufbau, Knochen und Regeneration."
-    : "Protein-Ziel: ca. 1,6 g pro kg Körpergewicht für Muskelerhalt und Regeneration – auch am Ruhetag wichtig.";
+    ? "Protein-Ziel: ca. " + targets.proteinPerKg + " g pro kg KÃ¶rpergewicht â im Jugend-Wachstum etwas hÃ¶her, wichtig fÃ¼r Muskelaufbau, Knochen und Regeneration."
+    : "Protein-Ziel: ca. 1,6 g pro kg KÃ¶rpergewicht fÃ¼r Muskelerhalt und Regeneration â auch am Ruhetag wichtig.";
 
-  const energyExplain = "Tagesenergie: Grundumsatz " + energyTarget.rmrKcal + " kcal (Schofield-Schätzung nach Alter und Gewicht) plus Alltag " + energyTarget.dailyLifeKcal + " kcal (Faktor 1,4) plus Training " + energyTarget.trainingKcal + " kcal (METs aus Dauer und Intensität) = ca. " + energyTarget.totalKcal + " kcal. Schätzwert – der Ring füllt sich über den Tag aus den geloggten Makros (4 kcal/g KH und Protein, 9 kcal/g Fett).";
+  const energyExplain = "Tagesenergie: Grundumsatz " + energyTarget.rmrKcal + " kcal (Schofield-SchÃ¤tzung nach Alter und Gewicht) plus Alltag " + energyTarget.dailyLifeKcal + " kcal (Faktor 1,4) plus Training " + energyTarget.trainingKcal + " kcal (METs aus Dauer und IntensitÃ¤t) = ca. " + energyTarget.totalKcal + " kcal. SchÃ¤tzwert â der Ring fÃ¼llt sich Ã¼ber den Tag aus den geloggten Makros (4 kcal/g KH und Protein, 9 kcal/g Fett).";
 
   const carbRest = loggedCarbs >= dailyTargetG
-    ? "Ziel erreicht – stark!"
+    ? "Ziel erreicht â stark!"
     : "noch " + Math.round(dailyTargetG - loggedCarbs) + " g";
   const proteinRest = loggedProtein >= proteinTargetG
     ? "Ziel erreicht"
@@ -304,18 +306,45 @@ export default function DaySummary({
     ? "Ziel erreicht"
     : "noch " + Math.round(energyTarget.totalKcal - balance.loggedKcal) + " kcal";
 
+  /* Woche als Kontrolleinheit (Evidenz-Update Okt 2026): Der einzelne
+   * Tag ist eine Naeherung - Selbst-Reports haben 20-30 % Messfehler,
+   * und 14-30 Tage waeren noetig, um die wahre Aufnahme auf 10 %
+   * Genauigkeit zu schaetzen. Die 7-Tage-Summe gegen die Summe der
+   * Tagesziele ist die ehrliche Metrik. Ampel: >= 85 % gruen,
+   * >= 65 % gelb, darunter rot (RED-S-relevant, besonders U15-U19). */
+  const weekDays: { iso: string; weekday: number; pct: number }[] = [];
+  let weekTargetG = 0;
+  let weekLoggedG = 0;
+  for (let k = 6; k >= 0; k -= 1) {
+    const d = new Date();
+    d.setDate(d.getDate() - k);
+    const iso = localIso(d);
+    const ds = sessions.filter((s) => s.session_date === iso);
+    const dsMinutes = ds.reduce((sum, s) => sum + s.duration_min, 0);
+    const dsLongest = ds.reduce((m, s) => Math.max(m, s.duration_min), 0);
+    const dsMaxInt = ds.some((s) => s.intensity === "high") ? "high" : ds.some((s) => s.intensity === "moderate") ? "moderate" : "low";
+    const wkDayType = dayTypeFor(dsMinutes, dsMaxInt, dsLongest);
+    const wkTargets = dailyTargetsFor(wkDayType, weightKg, youth);
+    const wkLogged = mealLogs.filter((l) => l.log_date === iso).reduce((sum, l) => sum + Number(l.carbs_g), 0);
+    weekTargetG += wkTargets.carbsG;
+    weekLoggedG += wkLogged;
+    weekDays.push({ iso, weekday: weekdayIndexMondayFirst(iso), pct: wkTargets.carbsG > 0 ? Math.min(150, (wkLogged / wkTargets.carbsG) * 100) : 0 });
+  }
+  const weekPct = weekTargetG > 0 ? (weekLoggedG / weekTargetG) * 100 : 0;
+  const weekLevel = weekPct >= 85 ? "green" : weekPct >= 65 ? "amber" : "red";
+
   let nextStep: string;
   if (todays.length === 0) {
-    nextStep = "Erfasse dein Training – danach erscheint dein Fueling-Plan.";
+    nextStep = "Erfasse dein Training â danach erscheint dein Fueling-Plan.";
   } else if (loggedCarbs === 0) {
     const first = phases.find((p) => p.key === "pre");
     nextStep = first
-      ? "Nächster Schritt: " + first.label + " – ca. " + first.carbsG + " g KH."
+      ? "NÃ¤chster Schritt: " + first.label + " â ca. " + first.carbsG + " g KH."
       : "Logge deine erste Mahlzeit.";
   } else if (loggedCarbs < dailyTargetG * 0.8) {
-    nextStep = "Noch " + Math.round(dailyTargetG - loggedCarbs) + " g KH bis zum Tagesziel – z. B. " + (dayType === "rest" ? "Obst und Joghurt." : "Reis, Nudeln oder ein Iso-Getränk.");
+    nextStep = "Noch " + Math.round(dailyTargetG - loggedCarbs) + " g KH bis zum Tagesziel â z. B. " + (dayType === "rest" ? "Obst und Joghurt." : "Reis, Nudeln oder ein Iso-GetrÃ¤nk.");
   } else {
-    nextStep = "Tagesziel fast erreicht – stark! Jetzt auf Protein und Erholung achten.";
+    nextStep = "Tagesziel fast erreicht â stark! Jetzt auf Protein und Erholung achten.";
   }
 
   return (
@@ -329,7 +358,7 @@ export default function DaySummary({
           type="button"
           className="sumhead-edit"
           onClick={onEditDay}
-          title="Mahlzeiten, Snacks und Anlässe dieses Tages anpassen"
+          title="Mahlzeiten, Snacks und AnlÃ¤sse dieses Tages anpassen"
         >
           Tag anpassen
         </button>
@@ -338,10 +367,10 @@ export default function DaySummary({
       <div className="traincard">
         <div className="traincard-head">
           <span className="traincard-title">
-            Training <Tip text="Deine Einheiten dieses Tages. Bearbeiten öffnet die Einheit mit ihrem vollen Fueling-Plan – änderst du Dauer oder Intensität, rechnen Ringe, Timeline und Mahlzeitziele sofort neu." />
+            Training <Tip text="Deine Einheiten dieses Tages. Bearbeiten Ã¶ffnet die Einheit mit ihrem vollen Fueling-Plan â Ã¤nderst du Dauer oder IntensitÃ¤t, rechnen Ringe, Timeline und Mahlzeitziele sofort neu." />
           </span>
           {todays.length > 0 ? (
-            <span className="traincard-sum">{minutes} min · {plannedCarbs} g KH geplant · {liters} l Flüssigkeit</span>
+            <span className="traincard-sum">{minutes} min Â· {plannedCarbs} g KH geplant Â· {liters} l FlÃ¼ssigkeit</span>
           ) : null}
         </div>
         {todays.length === 0 ? (
@@ -350,8 +379,8 @@ export default function DaySummary({
           <div className="trainrows">
             {todays.map((s) => (
               <div className="trainrow" key={s.id ?? s.sport + (s.session_start ?? "")}>
-                <span className="trainrow-when">{s.session_start || "—"}</span>
-                <span className="trainrow-name">{s.sport} · {s.duration_min} min · {intensityText(s.intensity)}</span>
+                <span className="trainrow-when">{s.session_start || "â"}</span>
+                <span className="trainrow-name">{s.sport} Â· {s.duration_min} min Â· {intensityText(s.intensity)}</span>
                 <button type="button" className="trainrow-edit" onClick={() => onSelectSession(s)}>
                   Bearbeiten
                 </button>
@@ -385,24 +414,54 @@ export default function DaySummary({
         />
       </div>
 
+      <div className="weekampel">
+        <span className="weekampel-title">
+          Woche (7 Tage) <Tip text="Forschungsbefund: Selbst berichtete ErnÃ¤hrung hat typischerweise 20-30 % Messfehler, und 14-30 Tage wÃ¤ren nÃ¶tig, um die wahre Aufnahme auf 10 % genau zu kennen. Der einzelne Tag ist deshalb eine NÃ¤herung â die 7-Tage-Summe gegen deine periodisierten Tagesziele ist die ehrliche Kontrolleinheit: ab 85 % gilt die Woche als erreicht, unter 65 % wird sie relevant (RED-S)." />
+        </span>
+        <div className="track">
+          <div
+            className={"fill " + (weekLevel === "green" ? "fill-green" : weekLevel === "amber" ? "fill-amber" : "fill-red")}
+            style={{ width: Math.min(100, weekPct) + "%" }}
+          />
+        </div>
+        <span className="weekampel-meta">
+          {Math.round(weekLoggedG)} von {Math.round(weekTargetG)} g KH Â· {Math.round(weekPct)} % â{" "}
+          {weekLevel === "green"
+            ? "Wochenziel erreicht â stark!"
+            : weekLevel === "amber"
+              ? "Woche leicht unter dem Ziel â die nÃ¤chsten Tage bewusst kohlenhydratreicher planen."
+              : youth
+                ? "Woche deutlich unter dem Ziel â im Wachstum ein RED-S-Risiko. Sprich mit einer ErnÃ¤hrungsfachkraft, wenn das Ã¶fter passiert."
+                : "Woche deutlich unter dem Ziel â die Glykogenspeicher laufen Ã¼ber mehrere Tage leer."}
+        </span>
+        <div className="weekampel-days">
+          {weekDays.map((d) => (
+            <span className="weekampel-day" key={d.iso} title={d.iso + ": " + Math.round(d.pct) + " %"}>
+              <span>{WEEKDAY_SHORT[d.weekday]}</span>
+              <span className={"wd-bar " + (d.pct >= 90 ? "ok" : d.pct >= 65 ? "mid" : "low")} style={{ width: Math.min(100, d.pct) + "%" }} />
+            </span>
+          ))}
+        </div>
+      </div>
+
       {nextSlot ? (
         <div className="realloc">
           <span className="realloc-title">
-            Nächster Anlass: {nextSlot.label} ({nextSlot.time})
-            <Tip text={nextSlot.explanation !== "" ? nextSlot.explanation : "Ziel aus deinem Tagesablauf-Raster, periodisiert gegen dein Training. Jeder Log rechnet die restlichen Anlässe neu."} />
+            NÃ¤chster Anlass: {nextSlot.label} ({nextSlot.time})
+            <Tip text={nextSlot.explanation !== "" ? nextSlot.explanation : "Ziel aus deinem Tagesablauf-Raster, periodisiert gegen dein Training. Jeder Log rechnet die restlichen AnlÃ¤sse neu."} />
           </span>
           <span className="realloc-value">
-            ≈ {nextSlot.carbsG} g KH · {nextSlot.proteinG} g Protein{nextChanged ? " (neu berechnet)" : ""}
+            â {nextSlot.carbsG} g KH Â· {nextSlot.proteinG} g Protein{nextChanged ? " (neu berechnet)" : ""}
           </span>
         </div>
       ) : null}
 
       <div className="timeline">
         <span className="timeline-title">
-          Timeline <Tip text="Dein Tag im Überblick: gestrichelte Kacheln sind geplant – graue aus deiner Routine mit Ziel (Farbe = KH-Betonung), blaue sind Fueling-Fenster um deine Einheit (Vor / Während / Danach). Tippe eine geplante Mahlzeit an und erfasse als Liste, was du gegessen hast – die Summe wird gegen das Mahlzeit-Ziel gerechnet, bei ±10 % ist die Mahlzeit abgehakt (✓); fehlt etwas, werden die übrigen Anlässe neu berechnet (neu: ≈ X g KH). Tippe eine ausgefüllte Kachel an, um den Log zu bearbeiten oder zu löschen. Mahlzeiten mit Einheits-Bezug tragen einen blauen Verweis, z. B. Frühstück → Laufen. Log-Farben: Blau = vor der Einheit, Gelb = während, Grün = danach, Grau = Snack/sonstige." />
+          Timeline <Tip text="Dein Tag im Ãberblick: gestrichelte Kacheln sind geplant â graue aus deiner Routine mit Ziel (Farbe = KH-Betonung), blaue sind Fueling-Fenster um deine Einheit (Vor / WÃ¤hrend / Danach). Tippe eine geplante Mahlzeit an und erfasse als Liste, was du gegessen hast â die Summe wird gegen das Mahlzeit-Ziel gerechnet, bei â10 % bis +20 % ist die Mahlzeit abgehakt (â); fehlt etwas, werden die Ã¼brigen AnlÃ¤sse neu berechnet (neu: â X g KH). Tippe eine ausgefÃ¼llte Kachel an, um den Log zu bearbeiten oder zu lÃ¶schen. Mahlzeiten mit Einheits-Bezug tragen einen blauen Verweis, z. B. FrÃ¼hstÃ¼ck â Laufen. Log-Farben: Blau = vor der Einheit, Gelb = wÃ¤hrend, GrÃ¼n = danach, Grau = Snack/sonstige." />
         </span>
         {feed.length === 0 ? (
-          <span className="muted timeline-empty">Noch nichts an diesem Tag – tippe unten auf + zum Loggen.</span>
+          <span className="muted timeline-empty">Noch nichts an diesem Tag â tippe unten auf + zum Loggen.</span>
         ) : (
           <div className="feed">
             {feed.map((f, i) =>
@@ -414,28 +473,30 @@ export default function DaySummary({
                     <span className="feedtime">{f.slot.time}</span>
                     <button
                       type="button"
-                      className={"slottile" + (st.done ? " done" : st.logged !== null ? " partial" : "")}
+                      className={"slottile" + (st.done ? " done" : st.over ? " over" : st.logged !== null ? " partial" : "")}
                       onClick={() => onLogMeal(f.slot)}
-                      title="Antippen: erfassen, was du gegessen hast – die Summe wird gegen das Ziel gerechnet"
+                      title="Antippen: erfassen, was du gegessen hast â die Summe wird gegen das Ziel gerechnet"
                     >
                       <span className={"calslot-dot " + f.slot.color} />
-                      <span className="tile-name">{st.done ? "✓ " : ""}{f.slot.label}</span>
+                      <span className="tile-name">{st.done ? "â " : ""}{f.slot.label}</span>
                       {f.slot.sessionLabel ? (
-                        <span className="slottile-link">→ {f.slot.sessionLabel} {f.slot.sessionTime}</span>
+                        <span className="slottile-link">â {f.slot.sessionLabel} {f.slot.sessionTime}</span>
                       ) : null}
                       {st.logged !== null ? (
                         <span className="slottile-target">
                           {st.done
-                            ? Math.round(st.logged) + " g KH erfasst – Ziel erreicht"
-                            : Math.round(st.logged) + " g erfasst – noch " + Math.max(0, Math.round(f.slot.carbsG - st.logged)) + " g KH"}
-                        </span>
+                            ? Math.round(st.logged) + " g KH erfasst â Ziel erreicht"
+                            : st.over
+                              ? Math.round(st.logged) + " g erfasst â Ã¼ber dem Ziel (fÃ¼r Kohlenhydrate ok)"
+                              : Math.round(st.logged) + " g erfasst â noch " + Math.max(0, Math.round(f.slot.carbsG - st.logged)) + " g KH"}
+                       </span>
                       ) : (
                         <span className="slottile-target">
-                          Ziel ≈ {f.slot.carbsG} g KH · {f.slot.proteinG} g P
-                          {adj ? <span className="slottile-adj"> (neu: ≈ {adj.carbsG} g KH)</span> : null}
+                          Ziel â {f.slot.carbsG} g KH Â· {f.slot.proteinG} g P
+                          {adj ? <span className="slottile-adj"> (neu: â {adj.carbsG} g KH)</span> : null}
                         </span>
                       )}
-                      <Tip text={f.slot.explanation !== "" ? f.slot.explanation : "Geplanter Anlass aus deiner Routine – periodisiert gegen dein Training. Antippen und als Liste erfassen, was du gegessen hast; die Summe wird gegen das Ziel gerechnet (±10 % = abgehakt)."} />
+                      <Tip text={f.slot.explanation !== "" ? f.slot.explanation : "Geplanter Anlass aus deiner Routine â periodisiert gegen dein Training. Antippen und als Liste erfassen, was du gegessen hast; die Summe wird gegen das Ziel gerechnet (â10 % bis +20 % = abgehakt, etwas mehr ist unkritisch)."} />
                     </button>
                   </div>
                 );
@@ -446,7 +507,7 @@ export default function DaySummary({
                     type="button"
                     className={"mealtile tile-" + f.log.phase}
                     onClick={() => onEditLog(f.log)}
-                    title="Log ansehen, korrigieren oder löschen"
+                    title="Log ansehen, korrigieren oder lÃ¶schen"
                   >
                     <span className="tile-head">
                       <span className="tile-name">{f.log.name}</span>
@@ -467,8 +528,8 @@ export default function DaySummary({
                     <span className="tile-name">{f.cp.label}</span>
                     <span className="fueltile-target">
                       {f.cp.key === "during"
-                        ? f.cp.carbsG + " g KH · " + f.cp.fluidMl + " ml/h · " + f.cp.sodiumMg + " mg Na/h"
-                        : "≈ " + f.cp.carbsG + " g KH" + (f.cp.proteinG > 0 ? " · " + f.cp.proteinG + " g P" : "") + " · " + f.cp.fluidMl + " ml"}
+                        ? f.cp.carbsG + " g KH Â· " + f.cp.fluidMl + " ml/h Â· " + f.cp.sodiumMg + " mg Na/h"
+                        : "â " + f.cp.carbsG + " g KH" + (f.cp.proteinG > 0 ? " Â· " + f.cp.proteinG + " g P" : "") + " Â· " + f.cp.fluidMl + " ml"}
                     </span>
                     <Tip text={f.cp.explanation} />
                   </div>
@@ -482,7 +543,7 @@ export default function DaySummary({
                       className="tile-toggle"
                       onClick={() => setOpenSession(openSession === f.session.id ? null : f.session.id ?? null)}
                     >
-                      <span className="tile-name">{f.session.sport} · {f.session.duration_min} min · {intensityText(f.session.intensity)}</span>
+                      <span className="tile-name">{f.session.sport} Â· {f.session.duration_min} min Â· {intensityText(f.session.intensity)}</span>
                     </button>
                     {openSession === f.session.id ? (
                       <SessionDrawer session={f.session} weightKg={weightKg} onOpenPlan={() => onSelectSession(f.session)} />
@@ -498,7 +559,7 @@ export default function DaySummary({
       {warnings.length > 0 && (
         <div className="reds">
           <span className="reds-title">
-            RED-S-Schutz <Tip text="RED-S = Relative Energy Deficiency in Sport: Die Energiezufuhr liegt dauerhaft unter dem Bedarf. Fuelix warnt früh, besonders bei Jugendlichen, weil Wachstum, Knochen und Hormonsystem hier am empfindlichsten reagieren." />
+            RED-S-Schutz <Tip text="RED-S = Relative Energy Deficiency in Sport: Die Energiezufuhr liegt dauerhaft unter dem Bedarf. Fuelix warnt frÃ¼h, besonders bei Jugendlichen, weil Wachstum, Knochen und Hormonsystem hier am empfindlichsten reagieren." />
           </span>
           <ul className="reds-list">
             {warnings.map((w) => (
@@ -512,3 +573,4 @@ export default function DaySummary({
     </div>
   );
 }
+

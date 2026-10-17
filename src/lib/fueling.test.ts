@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { intensityFromStrava, mapActivityToSession, sportFromStrava, type StravaActivity } from "./stravaMap";
-import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, inferLogPhase, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, sessionFuelingCheckpoints, youthDailyCarbsPerKg } from "./fueling";
+import { ageFromBirthYear, buildCarbAmpel, buildRaceDayPlan, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, inferLogPhase, isYouthAthlete, mealPlanFor, reallocateMealPlan, slotCarbStatus, restOfDayPhase, sessionFuelingCheckpoints, youthDailyCarbsPerKg } from "./fueling";
 import { overridesForDate, slotsForDate } from "./schedule";
 import type { MealOverride, MealSlot } from "../types";
 
@@ -267,16 +267,67 @@ describe("Mahlzeiten-Periodisierung (DUO-35)", () => {
     expect(snack?.explanation).toContain("Neu berechnet");
   });
 
-  it("Reallocation bei ueberschrittenem Tagesziel: keine KH mehr, rot", () => {
+  it("Reallocation bei ueberschrittenem Tagesziel: Slot-Floor statt Null (RED-S-Schutz)", () => {
     const plan = mealPlanFor({ slots: raster, sessions: [], weightKg: 70, dayType: "rest", isYouth: false });
     const re = reallocateMealPlan(plan, 300, "13:00");
     const future = re.slots.filter((s) => s.time > "13:00");
     expect(future.length).toBe(2);
-    future.forEach((s) => {
-      expect(s.carbsG).toBe(0);
-      expect(s.color).toBe("red");
-    });
+    /* Forschungsbefund: Ausgelassene Mahlzeiten sind ein RED-S-Risiko -
+     * jeder offene Anlass behaelt eine Grundportion (~0,3 g/kg = 21 g bei
+     * 70 kg), proportional verteilt: Snack 21 (Floor), Abendessen 27. */
+    const snack = re.slots.find((s) => s.label === "Snack");
+    const abend = re.slots.find((s) => s.label === "Abendessen");
+    expect(snack?.carbsG).toBe(21);
+    expect(abend?.carbsG).toBe(27);
+    expect(snack?.explanation).toContain("Grundportion");
   });
+
+  it("Jugend-Floor liegt hoeher (0,4 g/kg, RED-S-Schutz U15-U19)", () => {
+    const plan = mealPlanFor({ slots: raster, sessions: [], weightKg: 70, dayType: "rest", isYouth: false });
+    const re = reallocateMealPlan(plan, 300, "13:00", { weightKg: 70, isYouth: true });
+    const snack = re.slots.find((s) => s.label === "Snack");
+    const abend = re.slots.find((s) => s.label === "Abendessen");
+    expect(snack?.carbsG).toBe(28);
+    expect(abend?.carbsG).toBeGreaterThanOrEqual(28);
+  });
+
+  it("Peri-Workout-Anlaesse bleiben von der Umverteilung unangetastet (<8-h-Fenster)", () => {
+    const rasterMitSpaet = [
+      { time: "07:00", label: "Fruehstueck", primary: true },
+      { time: "12:30", label: "Mittagessen", primary: true },
+      { time: "15:30", label: "Snack", primary: false },
+      { time: "18:30", label: "Abendessen", primary: true },
+      { time: "21:00", label: "Spaetsnack", primary: false }
+    ];
+    const plan = mealPlanFor({
+      slots: rasterMitSpaet,
+      sessions: [{ start: "16:00", durationMin: 90, intensity: "moderate", heat: "normal" }],
+      weightKg: 70,
+      dayType: "load",
+      isYouth: false
+    });
+    const origAbend = plan.slots.find((s) => s.label === "Abendessen");
+    expect(origAbend?.relation).toBe("post");
+    /* Tagesziel 420 g, schon 400 g gegessen: eigentlich kaum Restbudget -
+     * aber der post-Anlass behaelt sein Ziel (Timing zaehlt), nur der
+     * freie Spaetsnack faellt auf den Floor. */
+    const re = reallocateMealPlan(plan, 400, "17:00", { weightKg: 70, isYouth: false });
+    const abend = re.slots.find((s) => s.label === "Abendessen");
+    const spaet = re.slots.find((s) => s.label === "Spaetsnack");
+    expect(abend?.carbsG).toBe(origAbend?.carbsG);
+    expect(abend?.explanation).toContain("Trainingsnaher Anlass");
+    expect(spaet?.carbsG).toBeGreaterThanOrEqual(21);
+  });
+
+  it("Slot-Status: asymmetrische Toleranz -10 % bis +20 %", () => {
+    expect(slotCarbStatus(100, 95).done).toBe(true);
+    expect(slotCarbStatus(100, 118).done).toBe(true);
+    expect(slotCarbStatus(100, 121).over).toBe(true);
+    expect(slotCarbStatus(100, 121).done).toBe(false);
+    expect(slotCarbStatus(100, 50).done).toBe(false);
+    expect(slotCarbStatus(0, 50).done).toBe(false);
+  });
+
 
   it("Anlass-Erkennung aus Uhrzeit und geplanter Einheit", () => {
     const sessions = [{ start: "17:00", durationMin: 90, intensity: "moderate", heat: "normal" }];
@@ -331,20 +382,20 @@ describe("Strava-Mapping (DUO-23)", () => {
 });
 
 describe("Kalender: Routine vs. Einzeltermin (DUO-36)", () => {
-  // Routine fuer Freitag (weekday 4): Fruehstück 07:00 + Mittagessen 12:30.
+  // Routine fuer Freitag (weekday 4): Fruehst�ck 07:00 + Mittagessen 12:30.
   const routine: MealSlot[] = [
-    { id: "r1", weekday: 4, time: "07:00", label: "Frühstück", primary_meal: true },
+    { id: "r1", weekday: 4, time: "07:00", label: "Fr�hst�ck", primary_meal: true },
     { id: "r2", weekday: 4, time: "12:30", label: "Mittagessen", primary_meal: true }
   ];
-  // Override fuer den 2026-10-16 (ein Freitag): Wettkampf-Frühstück + Pre-Race-Snack.
+  // Override fuer den 2026-10-16 (ein Freitag): Wettkampf-Fr�hst�ck + Pre-Race-Snack.
   const ovs: MealOverride[] = [
     { id: "o1", date: "2026-10-16", time: "11:00", label: "Pre-Race-Snack", primary_meal: false },
-    { id: "o2", date: "2026-10-16", time: "08:00", label: "Rennfrühstück", primary_meal: true }
+    { id: "o2", date: "2026-10-16", time: "08:00", label: "Rennfr�hst�ck", primary_meal: true }
   ];
 
   it("Override gewinnt fuer sein Datum", () => {
     const slots = slotsForDate(routine, ovs, "2026-10-16");
-    expect(slots.map((s) => s.label)).toEqual(["Rennfrühstück", "Pre-Race-Snack"]);
+    expect(slots.map((s) => s.label)).toEqual(["Rennfr�hst�ck", "Pre-Race-Snack"]);
     expect(slots[0].time).toBe("08:00");
     expect(slots[0].primary).toBe(true);
     expect(slots[1].primary).toBe(false);
@@ -352,7 +403,7 @@ describe("Kalender: Routine vs. Einzeltermin (DUO-36)", () => {
 
   it("ohne Override gilt die Routine des Wochentags (gleicher Wochentag, anderes Datum)", () => {
     const slots = slotsForDate(routine, ovs, "2026-10-23");
-    expect(slots.map((s) => s.label)).toEqual(["Frühstück", "Mittagessen"]);
+    expect(slots.map((s) => s.label)).toEqual(["Fr�hst�ck", "Mittagessen"]);
   });
 
   it("anderer Wochentag ohne Routine: leer", () => {
@@ -409,7 +460,7 @@ describe("Fueling-Integration in Timeline und Mahlzeiten (DUO-37)", () => {
   it("Mahlzeiten tragen die zugehoerige Einheit: Fueling steckt in der Mahlzeit", () => {
     const plan = mealPlanFor({
       slots: [
-        { time: "07:00", label: "Frühstück", primary: true },
+        { time: "07:00", label: "Fr�hst�ck", primary: true },
         { time: "12:30", label: "Mittagessen", primary: true }
       ],
       sessions: [{ start: "10:00", durationMin: 60, intensity: "low", heat: "normal", sport: "Laufen" }],
@@ -417,7 +468,7 @@ describe("Fueling-Integration in Timeline und Mahlzeiten (DUO-37)", () => {
       dayType: "load",
       isYouth: false
     });
-    const frueh = plan.slots.find((s) => s.label === "Frühstück");
+    const frueh = plan.slots.find((s) => s.label === "Fr�hst�ck");
     expect(frueh?.relation).toBe("pre");
     expect(frueh?.sessionLabel).toBe("Laufen");
     expect(frueh?.sessionTime).toBe("10:00");
@@ -428,7 +479,7 @@ describe("Fueling-Integration in Timeline und Mahlzeiten (DUO-37)", () => {
   it("Recovery-Mahlzeit nach der Einheit erhaelt Einheits-Bezug", () => {
     const plan = mealPlanFor({
       slots: [
-        { time: "07:00", label: "Frühstück", primary: true },
+        { time: "07:00", label: "Fr�hst�ck", primary: true },
         { time: "18:30", label: "Abendessen", primary: true }
       ],
       sessions: [{ start: "17:00", durationMin: 90, intensity: "moderate", heat: "normal", sport: "Radsport" }],
@@ -446,7 +497,7 @@ describe("Fueling-Integration in Timeline und Mahlzeiten (DUO-37)", () => {
   it("Reallocation bewahrt den Einheits-Bezug der Mahlzeit", () => {
     const plan = mealPlanFor({
       slots: [
-        { time: "07:00", label: "Frühstück", primary: true },
+        { time: "07:00", label: "Fr�hst�ck", primary: true },
         { time: "18:30", label: "Abendessen", primary: true }
       ],
       sessions: [{ start: "17:00", durationMin: 90, intensity: "moderate", heat: "normal", sport: "Radsport" }],
@@ -460,3 +511,4 @@ describe("Fueling-Integration in Timeline und Mahlzeiten (DUO-37)", () => {
     expect(abend?.relation).toBe("post");
   });
 });
+

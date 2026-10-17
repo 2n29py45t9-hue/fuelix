@@ -94,7 +94,7 @@ function buildStrategy(input: FuelingInput, carbs: number, fluid: number, sodium
 
 /*
  * Carb-Coding-Ampel (DUO-28):
- * Gruen = KH-Betonung wichtig · Gelb = moderat · Rot = kein Extra-Fueling noetig.
+ * Gruen = KH-Betonung wichtig Â· Gelb = moderat Â· Rot = kein Extra-Fueling noetig.
  * Jede Phase liefert eine Erklaerung, damit wechselnde Ziele nicht wie Bugs wirken.
  */
 export function dayTypeFor(minutes: number, maxIntensity: Intensity, longestMin: number): DayType {
@@ -340,19 +340,19 @@ export function buildRedsWarnings(input: RedsCheckInput): string[] {
   if (input.trainingMinutes >= 90 && ratio < 0.5) {
     warnings.push(
       "Lange Belastung mit zu wenig Energie: Bei " + input.trainingMinutes + " min Training liegen erst " +
-        Math.round(ratio * 100) + "% des KH-Ziels. Jetzt kohlenhydratreich nachladen – Regeneration, Immunsystem und die nächste Einheit hängen daran."
+        Math.round(ratio * 100) + "% des KH-Ziels. Jetzt kohlenhydratreich nachladen â Regeneration, Immunsystem und die nÃ¤chste Einheit hÃ¤ngen daran."
     );
   }
   if (input.dayType === "rest" && ratio < 0.4) {
     warnings.push(
-      "Ruhetag ist kein Fastentag: Der Körper braucht heute Energie für Regeneration" +
+      "Ruhetag ist kein Fastentag: Der KÃ¶rper braucht heute Energie fÃ¼r Regeneration" +
         (input.isYouth ? " und Wachstum" : "") + ". Verteile mindestens " +
-        Math.round(input.targetCarbsG * 0.4) + " g KH über den Tag."
+        Math.round(input.targetCarbsG * 0.4) + " g KH Ã¼ber den Tag."
     );
   }
   if (input.isYouth && ratio < 0.5 && input.trainingMinutes >= 60) {
     warnings.push(
-      "Jugend-Athlet (U15-U19): Zu geringe Energiezufuhr erhöht das RED-S-Risiko – Wachstum, Knochenstärke, Hormonhaushalt und Leistung können leiden. Wenn du dein Ziel häufig nicht erreichst, sprich mit einem Arzt oder einer Ernährungsfachkraft."
+      "Jugend-Athlet (U15-U19): Zu geringe Energiezufuhr erhÃ¶ht das RED-S-Risiko â Wachstum, KnochenstÃ¤rke, Hormonhaushalt und Leistung kÃ¶nnen leiden. Wenn du dein Ziel hÃ¤ufig nicht erreichst, sprich mit einem Arzt oder einer ErnÃ¤hrungsfachkraft."
     );
   }
   return warnings;
@@ -526,7 +526,7 @@ export function mealPlanFor(input: {
       result[preIdx].sessionTime = sess.start;
       result[preIdx].explanation =
         "Trainingsnah (vor der Einheit): ca. " + perKg + " g KH pro kg (" + Math.round(kg * perKg) +
-        " g) bis 4 h vor dem Start laden die Glykogenspeicher – das Carb Coding setzt deine größte Portion dorthin.";
+        " g) bis 4 h vor dem Start laden die Glykogenspeicher â das Carb Coding setzt deine grÃ¶Ãte Portion dorthin.";
     }
 
     if (preIdx >= 0 && sess.sport) {
@@ -545,7 +545,7 @@ export function mealPlanFor(input: {
       result[postIdx].color = "green";
       result[postIdx].explanation =
         "Regenerationsfenster (nach der Einheit): ca. " + plan.postCarbsG + " g KH (1,0-1,2 g/kg) plus " +
-        plan.postProteinG + " g Protein starten die Erholung, solange die Speicher am aufnahmefähigsten sind.";
+        plan.postProteinG + " g Protein starten die Erholung, solange die Speicher am aufnahmefÃ¤higsten sind.";
     }
     if (postIdx >= 0 && sess.sport) {
       result[postIdx].explanation += " Diese Mahlzeit ist dein Recovery-Fueling nach " + sess.sport + " (" + sess.start + ").";
@@ -576,13 +576,13 @@ export function mealPlanFor(input: {
         result[i].carbsG = Math.round(result[i].carbsG * 1.4);
         result[i].color = "green";
         result[i].explanation =
-          "Morgen steht eine harte Einheit an: Der Vorabend füllt die Speicher vor – das ist die 72-Stunden-Logik (gestern gegessen, heute geplant, morgen vorbereitet).";
+          "Morgen steht eine harte Einheit an: Der Vorabend fÃ¼llt die Speicher vor â das ist die 72-Stunden-Logik (gestern gegessen, heute geplant, morgen vorbereitet).";
         break;
       }
     }
   }
 
-  // 5) Farben und Erklärungen der freien Anlässe, Casein-Hinweis für späte Snacks.
+  // 5) Farben und ErklÃ¤rungen der freien AnlÃ¤sse, Casein-Hinweis fÃ¼r spÃ¤te Snacks.
   for (const s of result) {
     if (s.relation === "free") {
       const ratio = baseline > 0 ? s.carbsG / baseline : 1;
@@ -592,15 +592,15 @@ export function mealPlanFor(input: {
       if (!s.explanation) {
         s.explanation =
           "Freier Anteil: " + s.carbsG + " g KH aus dem Tagesziel (" + targets.carbsG + " g" +
-          (sessionFuelG > 0 ? " abzüglich " + sessionFuelG + " g Session-Fuel" : "") + "). " +
+          (sessionFuelG > 0 ? " abzÃ¼glich " + sessionFuelG + " g Session-Fuel" : "") + "). " +
           (input.dayType === "rest"
-            ? "Ruhetag: moderate Menge, Fokus auf Protein und Gemüse – die Speicher müssen heute nicht voll sein."
-            : "Belastungstag: ausgewogen zusätzlich zu den trainingsnahen Anlässen.");
+            ? "Ruhetag: moderate Menge, Fokus auf Protein und GemÃ¼se â die Speicher mÃ¼ssen heute nicht voll sein."
+            : "Belastungstag: ausgewogen zusÃ¤tzlich zu den trainingsnahen AnlÃ¤ssen.");
       }
     }
     if (minutesFromHHMM(s.time) >= 21 * 60) {
       s.proteinG = Math.max(s.proteinG, 25);
-      s.explanation += " Vor dem Schlafen: 20-40 g Casein (z. B. Quark) stützen die nächtliche Regeneration.";
+      s.explanation += " Vor dem Schlafen: 20-40 g Casein (z. B. Quark) stÃ¼tzen die nÃ¤chtliche Regeneration.";
     }
   }
 
@@ -615,8 +615,8 @@ export function mealPlanFor(input: {
 
 /*
  * Reallocation (DUO-35, Hexis-Prinzip): Nach jedem Log werden die Ziele der
- * noch ausstehenden Anlässe neu berechnet – gegessene KH verschieben das
- * Restbudget, statt nur einen Balken zu füllen. Vergangene Anlässe bleiben
+ * noch ausstehenden AnlÃ¤sse neu berechnet â gegessene KH verschieben das
+ * Restbudget, statt nur einen Balken zu fÃ¼llen. Vergangene AnlÃ¤sse bleiben
  * unangetastet, die Zukunft passt sich an.
  */
 /*
@@ -672,7 +672,7 @@ export function sessionFuelingCheckpoints(session: MealPlanSession, sport: strin
     checkpoints.push({
       key: "during",
       time: session.start,
-      label: "Session-Fuel · " + name,
+      label: "Session-Fuel Â· " + name,
       carbsG: plan.totalCarbsG,
       proteinG: 0,
       fluidMl: plan.fluidPerHour,
@@ -687,7 +687,7 @@ export function sessionFuelingCheckpoints(session: MealPlanSession, sport: strin
   checkpoints.push({
     key: "post",
     time: hhmmFromMinutes(startMin + session.durationMin),
-    label: "Danach · Recovery",
+    label: "Danach Â· Recovery",
     carbsG: plan.postCarbsG,
     proteinG: plan.postProteinG,
     fluidMl: plan.postFluidMl,
@@ -699,49 +699,105 @@ export function sessionFuelingCheckpoints(session: MealPlanSession, sport: strin
   return checkpoints;
 }
 
-export function reallocateMealPlan(plan: MealDayPlan, loggedCarbsG: number, nowTime: string): MealDayPlan {
+/* Forschungsbefund-Status eines Anlasses (Evidenz-Update Okt 2026):
+ * Asymmetrische Toleranz -10 % / +20 % statt +-10 % rund. Unter dem
+ * KH-Ziel ist der kritische Fall (Glykogen-Verfuegbarkeit, Regeneration);
+ * ein Ueberschuss landet dagegen einfach in den Glykogenspeichern und
+ * ist akut unkritisch. Rot bleibt dem deutlichen Ueberschuss (>20 %)
+ * bei bereits voller Tagesenergie vorbehalten - nicht dem einfachen
+ * "etwas mehr gegessen" (Diet-Druck vermeiden, v. a. U15-U19). */
+export function slotCarbStatus(targetG: number, loggedG: number): { done: boolean; over: boolean } {
+  if (targetG <= 0) return { done: false, over: false };
+  const done = loggedG >= targetG * 0.9 && loggedG <= targetG * 1.2;
+  const over = loggedG > targetG * 1.2;
+  return { done, over };
+}
+
+/*
+ * Evidenz-Update Reallocation (Okt 2026) - moderne Forschung zur
+ * Umverteilung uebrig bleibender Mahlzeiten:
+ * 1) Die TAGESUMME ist der Haupttreiber der Glykogen-Resynthese: Bei
+ *    >= 24 h bis zur naechsten Einheit ist die Frequenz der KH-Aufnahme
+ *    weniger wichtig als Gesamtkohlenhydrate plus Energie (Murray &
+ *    Rosenbloom, Fundamentals of Glycogen Metabolism). Verpasste KH
+ *    lassen sich also noch am selben Tag aufholen.
+ * 2) AUSNAHME peri-workout: Bei < 8 h zur naechsten Belastung zaehlt
+ *    die Rate (1,0-1,2 g/kg/h im 4-h-Fenster). Trainingsnahe Anlaesse
+ *    (pre/post) bleiben deshalb von der Umverteilung unangetastet.
+ * 3) PROPORTIONAL auf alle offenen Anlaesse statt alles in den naechsten
+ *    Slot - Magen-Darm-Toleranz und Absorption begrenzen Portionen.
+ * 4) SLOT-FLOOR: Kein offener Anlass wird auf 0 gedrosselt, auch bei
+ *    erreichtem Tagesziel bleibt eine Grundportion (~0,3 g/kg, Jugend
+ *    0,4 g/kg). Ausgelassene Mahlzeiten sind ein RED-S-Risikofaktor -
+ *    Training ohne KH erhoehte bei Jugendlichen die Knochenresorption
+ *    um 28 % (Stables et al. 2024); die IOC-RED-S-Leitlinie warnt vor
+ *    Kohlenhydrat-Verzicht im Wachstumsalter.
+ * 5) Tagesziel wird NIE reduziert: Umverteilung nur nach oben auf
+ *    offene Slots - bei Jugend (U15-U19) ist Drosseln tabu.
+ */
+export interface ReallocateOptions {
+  weightKg?: number;
+  isYouth?: boolean;
+}
+
+export function reallocateMealPlan(plan: MealDayPlan, loggedCarbsG: number, nowTime: string, opts?: ReallocateOptions): MealDayPlan {
   const nowMin = minutesFromHHMM(nowTime);
   const future = plan.slots
     .map((s, i) => ({ s, i, min: minutesFromHHMM(s.time) }))
     .filter((x) => x.min > nowMin);
   if (future.length === 0) return plan;
+  const weightKg = opts?.weightKg ?? 70;
+  const isYouth = opts?.isYouth ?? false;
+  const floorG = Math.round(weightKg * (isYouth ? 0.4 : 0.3));
   const remaining = Math.max(0, plan.totalCarbsG - loggedCarbsG);
   const slots = plan.slots.map((s) => ({ ...s }));
-  if (remaining <= 0) {
-    for (const x of future) {
-      slots[x.i].carbsG = 0;
-      slots[x.i].color = "red";
-      slots[x.i].explanation = "Tagesziel bereits erreicht – für heute sind keine Kohlenhydrate mehr nötig.";
-    }
-    return { ...plan, slots };
-  }
-  const futureSum = future.reduce((sum, x) => sum + x.s.carbsG, 0);
-  if (futureSum > 0) {
-    for (const x of future) {
-      const scaled = Math.round((x.s.carbsG / futureSum) * remaining);
-      slots[x.i].carbsG = scaled;
-      if (scaled < x.s.carbsG * 0.75) {
-        slots[x.i].color = x.s.color === "green" ? "yellow" : "red";
-      }
+
+  const isProtected = (x: { s: MealSlotPlan }) => x.s.relation === "pre" || x.s.relation === "post";
+  const protectedFuture = future.filter(isProtected);
+  const freeFuture = future.filter((x) => !isProtected(x));
+
+  // 1) Trainingsnahe Anlaesse: Ziel bleibt unangetastet (Timing-Fenster).
+  if (loggedCarbsG > 0) {
+    for (const x of protectedFuture) {
       slots[x.i].explanation =
-        "Neu berechnet nach deinen Logs: " + scaled + " g KH statt " + x.s.carbsG +
-        " g – du hast heute schon " + loggedCarbsG + " von " + plan.totalCarbsG + " g gegessen.";
+        x.s.explanation +
+        " Trainingsnaher Anlass: Dieses Ziel bleibt von der Umverteilung unangetastet - bei kurzen Abstaenden zur Einheit zaehlt das Timing mehr als die Tagessumme.";
     }
-  } else {
-    const weightSum = future.reduce((sum, x) => sum + (x.s.primary ? 1 : 0.55), 0);
-    for (const x of future) {
-      slots[x.i].carbsG = Math.round((remaining / (weightSum || 1)) * (x.s.primary ? 1 : 0.55));
-      slots[x.i].explanation = "Neu berechnet: Restbudget " + remaining + " g KH verteilt auf die übrigen Anlässe.";
+  }
+  if (freeFuture.length === 0) return { ...plan, slots };
+
+  // 2) Freie Anlaesse teilen sich das Restbudget proportional zum
+  //    vorherigen Ziel (nie alles in den naechsten Slot), mit Floor.
+  const protectedSum = protectedFuture.reduce((sum, x) => sum + x.s.carbsG, 0);
+  const freeSum = freeFuture.reduce((sum, x) => sum + x.s.carbsG, 0);
+  const weightBase = freeFuture.reduce((sum, x) => sum + (x.s.primary ? 1 : 0.55), 0);
+  const freeFloorSum = freeFuture.length * floorG;
+  const budget = Math.max(remaining - protectedSum, freeFloorSum);
+
+  for (const x of freeFuture) {
+    const share = freeSum > 0 ? x.s.carbsG / freeSum : weightBase > 0 ? (x.s.primary ? 1 : 0.55) / weightBase : 1 / freeFuture.length;
+    const scaled = Math.max(floorG, Math.round(share * budget));
+    slots[x.i].carbsG = scaled;
+    if (scaled < x.s.carbsG * 0.75) {
+      slots[x.i].color = x.s.color === "green" ? "yellow" : "red";
+    } else if (scaled > x.s.carbsG * 1.25) {
+      slots[x.i].color = "green";
     }
+    slots[x.i].explanation =
+      remaining <= 0
+        ? "Tagesziel bereits erreicht - dieser Anlass bleibt trotzdem als kleine Grundportion (" +
+          floorG + " g, RED-S-Schutz: keine ausgelassenen Mahlzeiten; Ueberschuss landet in den Glykogenspeichern)."
+        : "Neu berechnet nach deinen Logs: " + scaled + " g KH statt " + x.s.carbsG +
+          " g - du hast heute schon " + loggedCarbsG + " von " + plan.totalCarbsG +
+          " g gegessen. Das Restbudget verteilt sich proportional auf alle offenen Anlaesse.";
   }
   return { ...plan, slots };
 }
-
 /*
  * Automatische Anlass-Erkennung beim Logging (DUO-35): statt den Nutzer zu
  * fragen, leitet Fuelix die Fueling-Phase aus der Uhrzeit und den geplanten
- * Einheiten ab – weniger Fragen, schnellere Logs (Adherence-Forschung:
- * Zeit pro Log ist der stärkste Abbruchfaktor).
+ * Einheiten ab â weniger Fragen, schnellere Logs (Adherence-Forschung:
+ * Zeit pro Log ist der stÃ¤rkste Abbruchfaktor).
  */
 export function inferLogPhase(sessions: MealPlanSession[], nowTime: string): MealPhase {
   const nowMin = minutesFromHHMM(nowTime);
@@ -758,4 +814,5 @@ export function inferLogPhase(sessions: MealPlanSession[], nowTime: string): Mea
   }
   return "snack";
 }
+
 

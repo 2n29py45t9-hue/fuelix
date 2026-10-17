@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ageFromBirthYear, dayTypeFor, dayTypeLabel, isYouthAthlete, mealPlanFor, type MealDayPlan, type MealPlanSession, type MealSlotPlan } from "../lib/fueling";
+import { ageFromBirthYear, dayTypeFor, dayTypeLabel, isYouthAthlete, mealPlanFor, slotCarbStatus, type MealDayPlan, type MealPlanSession, type MealSlotPlan } from "../lib/fueling";
 import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM, weekdayIndexMondayFirst } from "../lib/date";
 import { clearFutureOverrides, saveOverrideForDate, saveRoutineForWeekday, slotsForDate, WEEKDAY_SHORT } from "../lib/mealSchedule";
 import Tip from "./Tip";
@@ -11,13 +11,13 @@ import type { DayType, MealLog, MealOverride, MealSlot, TrainingSession } from "
  * Kalender-Referenz (Google/Notion) mit Stundenraster.
  *
  * DUO-39: Monat im Header, aufklappbare Monatsuebersicht (heute gruen,
- * DayType-Markierungen, Monats-Navigation), heutiges Datum als grüner
- * Springe-zu-Heute-Button oben rechts, Erklär-Kasten entfernt.
+ * DayType-Markierungen, Monats-Navigation), heutiges Datum als grÃ¼ner
+ * Springe-zu-Heute-Button oben rechts, ErklÃ¤r-Kasten entfernt.
  * DUO-40: Trainingseinheiten als Bloecke ueber ihre VOLLE Dauer im
  * Raster, geloggte Mahlzeiten und Snacks erscheinen als Chips (wie in
- * der Home-Timeline) und sind klickbar – auch nachträglich loggen
- * (geplanter Anlass antippen → "Als gegessen loggen") und anpassen.
- * DUO-42: "+ Mahlzeit" ist jetzt "Tag anpassen" – Mahlzeiten UND
+ * der Home-Timeline) und sind klickbar â auch nachtrÃ¤glich loggen
+ * (geplanter Anlass antippen â "Als gegessen loggen") und anpassen.
+ * DUO-42: "+ Mahlzeit" ist jetzt "Tag anpassen" â Mahlzeiten UND
  * Trainingszeiten des Tages; die Wochen-Routine-Karte ist entfernt
  * (die Notion-Logik "nur dieser Tag / ab jetzt jede Wiederholung"
  * steckt in jedem Tag).
@@ -207,21 +207,21 @@ export default function MealCalendar({
         <div className="ds-head">
           <span className="ds-month">
             {monthLabel}{" "}
-            <Tip text="Carb Coding: Jeder Tag zeigt seinen Typ (Ruhetag, Belastungstag, Wettkampftag) und jedes geplante Ziel ist gegen dein Training periodisiert. Deine Onboarding-Routine gilt automatisch für jede Woche; Abweichungen legst du pro Tag an (Override) oder änderst ab jetzt jede Wiederholung." />
+            <Tip text="Carb Coding: Jeder Tag zeigt seinen Typ (Ruhetag, Belastungstag, Wettkampftag) und jedes geplante Ziel ist gegen dein Training periodisiert. Deine Onboarding-Routine gilt automatisch fÃ¼r jede Woche; Abweichungen legst du pro Tag an (Override) oder Ã¤nderst ab jetzt jede Wiederholung." />
           </span>
           <div className="ds-weeknav">
             <button type="button" className="cal-addbtn" onClick={() => onAddSession(anchorIso)} title="Training oder Event an beliebigem Datum anlegen">
               + Termin
             </button>
             <button type="button" className="ds-navbtn" onClick={() => setDayOffset(dayOffset - 1)} aria-label="Vorheriger Tag">
-              ←
+              â
             </button>
             <button
               type="button"
               className={"ds-navbtn" + (showMonth ? " on" : "")}
               onClick={() => setShowMonth(!showMonth)}
-              aria-label="Monatsübersicht ein- oder ausklappen"
-              title="Monatsübersicht"
+              aria-label="MonatsÃ¼bersicht ein- oder ausklappen"
+              title="MonatsÃ¼bersicht"
             >
               Monat
             </button>
@@ -233,8 +233,8 @@ export default function MealCalendar({
             >
               {todayLabel}
             </button>
-            <button type="button" className="ds-navbtn" onClick={() => setDayOffset(dayOffset + 1)} aria-label="Nächster Tag">
-              →
+            <button type="button" className="ds-navbtn" onClick={() => setDayOffset(dayOffset + 1)} aria-label="NÃ¤chster Tag">
+              â
             </button>
           </div>
         </div>
@@ -243,11 +243,11 @@ export default function MealCalendar({
           <div className="mgrid">
             <div className="mgrid-nav">
               <button type="button" className="ds-navbtn" onClick={() => gotoMonth(-1)} aria-label="Vorheriger Monat">
-                ←
+                â
               </button>
               <span className="mgrid-title">{monthTitle}</span>
-              <button type="button" className="ds-navbtn" onClick={() => gotoMonth(1)} aria-label="Nächster Monat">
-                →
+              <button type="button" className="ds-navbtn" onClick={() => gotoMonth(1)} aria-label="NÃ¤chster Monat">
+                â
               </button>
             </div>
             <div className="mgrid-weekdays">
@@ -283,8 +283,8 @@ export default function MealCalendar({
             <div className="cal3-corner" />
             {days.map((day) => (
               <div className={"cal3-dhead" + (day.iso === selectedDate ? " selected" : "")} key={day.iso}>
-                <button type="button" className="cal3-dtitle" onClick={() => onSelectDate(day.iso)} title="Tag im Plan-Tab öffnen">
-                  <span className="cal3-dwd">{WEEKDAY_SHORT[day.weekday]} · {day.num}.</span>
+                <button type="button" className="cal3-dtitle" onClick={() => onSelectDate(day.iso)} title="Tag im Plan-Tab Ã¶ffnen">
+                  <span className="cal3-dwd">{WEEKDAY_SHORT[day.weekday]} Â· {day.num}.</span>
                   <span className={"badge badge-" + day.dayType}>{dayTypeLabel(day.dayType)}</span>
                   {day.plan ? (
                     <span className="cal3-dtarget">{day.plan.totalCarbsG} g KH</span>
@@ -307,7 +307,7 @@ export default function MealCalendar({
               <div className="cal3-cell cal3-allday" key={"ad" + day.iso}>
                 {day.untimed.map((s) => (
                   <button type="button" className="calev calev-session" key={s.id ?? s.session_date} onClick={() => onSelectSession(s)}>
-                    <span className="calev-label">{s.sport} · {s.duration_min} min · {intensityShort(s.intensity)}</span>
+                    <span className="calev-label">{s.sport} Â· {s.duration_min} min Â· {intensityShort(s.intensity)}</span>
                     <span className="calev-target">ohne Zeit</span>
                   </button>
                 ))}
@@ -336,34 +336,34 @@ export default function MealCalendar({
                           style={{ height: blockH + "px" }}
                           key={e.s.id ?? e.s.session_date + e.s.duration_min}
                           onClick={() => onSelectSession(e.s)}
-                          title="Fueling-Plan dieser Einheit öffnen"
+                          title="Fueling-Plan dieser Einheit Ã¶ffnen"
                         >
-                          <span className="calev-time">{e.s.session_start} – {endHhmm(e.s.session_start ?? "", e.s.duration_min)}</span>
+                          <span className="calev-time">{e.s.session_start} â {endHhmm(e.s.session_start ?? "", e.s.duration_min)}</span>
                           <span className="calev-label">{e.s.sport}</span>
-                          <span className="calev-target">{e.s.duration_min} min · {intensityShort(e.s.intensity)}</span>
+                          <span className="calev-target">{e.s.duration_min} min Â· {intensityShort(e.s.intensity)}</span>
                         </button>
                       );
                     })}
                     {meals.map((e) => {
                       const logged = day.daySlotLogs.get(e.time);
-                      const done = !!(logged && e.carbsG > 0 && Number(logged.carbs_g) >= e.carbsG * 0.9 && Number(logged.carbs_g) <= e.carbsG * 1.1);
+                      const done = !!(logged && slotCarbStatus(e.carbsG, Number(logged.carbs_g)).done);
                       return (
                         <button
                           type="button"
                           className={"calev calev-meal" + (done ? " calev-done" : "")}
                           key={e.time + e.label}
                           onClick={() => onLogMeal(day.iso, e.slot)}
-                          title="Antippen: erfassen, was du gegessen hast (Liste) – Summe gegen das Ziel"
+                          title="Antippen: erfassen, was du gegessen hast (Liste) â Summe gegen das Ziel"
                         >
                           <span className="calev-time">{e.time}</span>
                           <span className={"calev-dot " + e.color} />
-                          <span className="calev-label">{done ? "✓ " : ""}{e.label}</span>
+                          <span className="calev-label">{done ? "â " : ""}{e.label}</span>
                           <span className="calev-target">
                             {done
                               ? Math.round(Number(logged?.carbs_g)) + " g erfasst"
                               : logged
-                                ? "≈ " + e.carbsG + " g KH · " + Math.round(Number(logged.carbs_g)) + " g erfasst"
-                                : "≈ " + e.carbsG + " g KH"}
+                                ? "â " + e.carbsG + " g KH Â· " + Math.round(Number(logged.carbs_g)) + " g erfasst"
+                                : "â " + e.carbsG + " g KH"}
                           </span>
                         </button>
                       );
@@ -374,11 +374,11 @@ export default function MealCalendar({
                         className={"calev calev-log tile-" + e.log.phase}
                         key={e.log.id}
                         onClick={() => onEditLog(e.log)}
-                        title="Log ansehen, korrigieren oder löschen"
+                        title="Log ansehen, korrigieren oder lÃ¶schen"
                       >
                         <span className="calev-time">{hhmmFromIso(e.log.created_at)}</span>
                         <span className="calev-label">{e.log.name}</span>
-                        <span className="calev-target">{Math.round(Number(e.log.carbs_g))} g KH · {Math.round(Number(e.log.protein_g))} g P</span>
+                        <span className="calev-target">{Math.round(Number(e.log.carbs_g))} g KH Â· {Math.round(Number(e.log.protein_g))} g P</span>
                       </button>
                     ))}
                   </div>
@@ -411,3 +411,4 @@ export default function MealCalendar({
     </div>
   );
 }
+

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import type { MealLogItem, MealPhase } from "../types";
-import type { MealSlotPlan } from "../lib/fueling";
+import { slotCarbStatus, type MealSlotPlan } from "../lib/fueling";
 
 /*
  * Mahlzeit-Logger (Finetuning): Antippen einer GEPLANTEN Mahlzeit oeffnet
@@ -9,7 +9,13 @@ import type { MealSlotPlan } from "../lib/fueling";
  * der Button da). Der Nutzer fuegt einzelne Lebensmittel als simple Liste
  * hinzu; die Summe der Inhaltsstoffe wird live gegen das Ziel der Mahlzeit
  * gerechnet:
- * - innerhalb +-10 % des KH-Ziels -> Mahlzeit ist abgehakt
+ * - innerhalb der Toleranz (-10 % bis +20 % des KH-Ziels) -> Mahlzeit ist
+ *   abgehakt. Asymmetrisch, weil Untererfuellung der kritische Fall ist
+ *   (Glykogen, Regeneration), Ueberschuss aber in den Glykogenspeichern
+ *   landet und akut unkritisch ist (Evidenz-Update Okt 2026).
+ * - Rot gibt es nur bei deutlichem Ueberschuss (>20 %) UND bereits
+ *   voller Tagesenergie - nicht fuer "etwas mehr gegessen" (kein
+ *   Diet-Druck, gerade im Jugendbereich U15-U19).
  * - darunter -> Restanzeige; die uebrigen Mahlzeiten des Tages werden
  *   ueber die Reallocation (reallocateMealPlan) angepasst
  * Die Items liegen in meal_log_items; meal_logs haelt die Summe als
@@ -17,17 +23,20 @@ import type { MealSlotPlan } from "../lib/fueling";
  * rechnen also wie gewohnt mit.
  */
 
-const TOL = 0.1;
-
 export default function MealLogger({
   dateIso,
   slot,
+  energyFull = false,
   onClose,
   onChanged,
   onEditDay
 }: {
   dateIso: string;
   slot: MealSlotPlan;
+  /* Evidenz-Update: "rot" nur bei >20 % ueber dem Ziel und bereits
+   * erfuellter Tagesenergie - die App reicht den Energie-Ring-Status
+   * hierher durch. */
+  energyFull?: boolean;
   onClose: () => void;
   onChanged: () => void;
   onEditDay: () => void;
@@ -79,8 +88,10 @@ export default function MealLogger({
   const targetCarbs = slot.carbsG;
   const targetProtein = slot.proteinG;
   const carbPct = targetCarbs > 0 ? (sum.carbs / targetCarbs) * 100 : 0;
-  const inTolerance = sum.carbs >= targetCarbs * (1 - TOL) && sum.carbs <= targetCarbs * (1 + TOL);
-  const over = sum.carbs > targetCarbs * (1 + TOL);
+  const st = slotCarbStatus(targetCarbs, sum.carbs);
+  const inTolerance = st.done;
+  const redOver = st.over && energyFull;
+  const amberOver = st.over && !redOver;
   const remaining = Math.max(0, targetCarbs - sum.carbs);
 
   const addItem = async (e: FormEvent) => {
@@ -186,17 +197,17 @@ export default function MealLogger({
       </h2>
       <p className="muted mlg-hint">
         Was hast du gegessen? Einfach als Liste erfassen – die Summe wird gegen das Ziel der Mahlzeit
-        gerechnet (±10 % = abgehakt). Fehlt etwas, rechnen die übrigen Mahlzeiten des Tages neu.
+        gerechnet (–10 % bis +20 % = abgehakt; etwas mehr ist bei Kohlenhydraten unkritisch). Fehlt etwas, rechnen die übrigen Mahlzeiten des Tages neu.
       </p>
 
-      <div className={"mlg-target" + (inTolerance ? " ok" : "") + (over ? " over" : "")}>
+      <div className={"mlg-target" + (inTolerance ? " ok" : "") + (redOver ? " over" : "")}>
         <div className="mlg-target-row">
           <span className="mlg-target-label">Ziel</span>
           <span className="mlg-target-val">≈ {Math.round(targetCarbs)} g KH · {Math.round(targetProtein)} g Protein</span>
         </div>
         <div className="track mlg-track">
           <div
-            className={"fill " + (inTolerance ? "fill-green" : over ? "fill-red" : "fill-amber")}
+            className={"fill " + (inTolerance ? "fill-green" : redOver ? "fill-red" : "fill-amber")}
             style={{ width: Math.min(100, carbPct) + "%" }}
           />
         </div>
@@ -204,7 +215,13 @@ export default function MealLogger({
           <span className="mlg-target-label">Erfasst</span>
           <span className="mlg-target-val">
             {Math.round(sum.carbs)} g KH · {Math.round(sum.protein)} g P · {Math.round(sum.fat)} g F
-            {inTolerance ? " – Ziel erreicht, Mahlzeit abgehakt" : over ? " – über dem Ziel" : " – noch " + Math.round(remaining) + " g KH bis zum Ziel"}
+            {inTolerance
+              ? " – Ziel erreicht, Mahlzeit abgehakt"
+              : redOver
+                ? " – deutlich über dem Ziel, Tagesenergie schon erreicht"
+                : amberOver
+                  ? " – über dem Ziel (für Kohlenhydrate akut unkritisch)"
+                  : " – noch " + Math.round(remaining) + " g KH bis zum Ziel"}
           </span>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
-import { buildCarbAmpel, calculateFuelingPlan, inferLogPhase } from "./lib/fueling";
+import { ageFromBirthYear, buildCarbAmpel, calculateFuelingPlan, estimateDailyEnergyNeed, inferLogPhase } from "./lib/fueling";
 import { clearFutureOverrides, saveOverrideForDate, saveRoutineForWeekday } from "./lib/mealSchedule";
 import { buildSessionsCsv, downloadCsv } from "./lib/csv";
 import { hhmmNow, localIso, weekdayIndexMondayFirst } from "./lib/date";
@@ -111,7 +111,7 @@ export default function App() {
     setTimeout(() => setStatus(""), 2000);
   };
 
-  // DUO-45: "Tag anpassen" - Mahlzeiten/Anlässe des ausgewählten Tages
+  // DUO-45: "Tag anpassen" - Mahlzeiten/AnlÃ¤sse des ausgewÃ¤hlten Tages
   // editieren mit Notion-Logik: nur dieses Datum (Override) oder ab
   // jetzt jede Wiederholung dieses Wochentags (Routine).
   const saveDay = async (slots: { time: string; label: string; primary: boolean }[], scope: MealEditScope) => {
@@ -191,6 +191,26 @@ export default function App() {
     0
   );
 
+  /* Evidenz-Update (Okt 2026): Ist die Tagesenergie schon erreicht? Nur
+   * dann markiert der MealLogger deutliche KH-Ueberschuesse rot - sonst
+   * nur amber, denn KH-Ueberschuss landet in den Glykogenspeichern und
+   * ist akut unkritisch. */
+  const energyFullFor = (iso: string) => {
+    const logs = mealLogs.filter((l) => l.log_date === iso);
+    if (logs.length === 0) return false;
+    const ds = sessions.filter((s) => s.session_date === iso);
+    const dsMinutes = ds.reduce((sum, s) => sum + s.duration_min, 0);
+    const dsMaxInt = ds.some((s) => s.intensity === "high") ? "high" : ds.some((s) => s.intensity === "moderate") ? "moderate" : "low";
+    const target = estimateDailyEnergyNeed({
+      weightKg,
+      ageYears: ageFromBirthYear(birthYear === "" ? null : birthYear),
+      trainingMinutes: dsMinutes,
+      maxIntensity: dsMaxInt
+    });
+    const loggedKcal = logs.reduce((sum, l) => sum + Number(l.carbs_g) * 4 + Number(l.protein_g) * 4 + Number(l.fat_g) * 9, 0);
+    return loggedKcal >= target.totalKcal;
+  };
+
   return (
     <div className="app">
       <header className="appheader">
@@ -243,7 +263,7 @@ export default function App() {
                   setSessionSheet(true);
                 }}
                 aria-label="Training manuell erfassen"
-                title="Training manuell erfassen – dein Plan erscheint sofort"
+                title="Training manuell erfassen â dein Plan erscheint sofort"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" />
@@ -255,7 +275,7 @@ export default function App() {
                 className="capturebtn racebtn"
                 onClick={() => setRaceSheet(true)}
                 aria-label="Renntag planen"
-                title="Zukünftiges Rennen planen – wird als Einheit im Kalender angelegt"
+                title="ZukÃ¼nftiges Rennen planen â wird als Einheit im Kalender angelegt"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M5 21V4" />
@@ -309,7 +329,7 @@ export default function App() {
           <>
             <div className="card">
               <h2>Profil</h2>
-              <label htmlFor="weight">Körpergewicht (kg)</label>
+              <label htmlFor="weight">KÃ¶rpergewicht (kg)</label>
               <input
                 id="weight"
                 type="number"
@@ -319,7 +339,7 @@ export default function App() {
                 value={weightKg}
                 onChange={(e) => setWeightKg(Number(e.target.value))}
               />
-              <label htmlFor="birthyear">Geburtsjahr – aktiviert den Jugend-Modus (U15-U19)</label>
+              <label htmlFor="birthyear">Geburtsjahr â aktiviert den Jugend-Modus (U15-U19)</label>
               <input
                 id="birthyear"
                 type="number"
@@ -442,6 +462,7 @@ export default function App() {
             <MealLogger
               dateIso={logMeal.dateIso}
               slot={logMeal.slot}
+              energyFull={energyFullFor(logMeal.dateIso)}
               onClose={() => setLogMeal(null)}
               onChanged={load}
               onEditDay={() => {
@@ -457,3 +478,4 @@ export default function App() {
     </div>
   );
 }
+
