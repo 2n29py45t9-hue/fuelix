@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import { supabase } from "../lib/supabase";
 import { ageFromBirthYear, dayTypeFor, dayTypeLabel, isYouthAthlete, mealPlanFor, type MealDayPlan, type MealPlanSession, type MealSlotPlan } from "../lib/fueling";
 import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM, weekdayIndexMondayFirst } from "../lib/date";
 import { clearFutureOverrides, saveOverrideForDate, saveRoutineForWeekday, slotsForDate, WEEKDAY_SHORT } from "../lib/mealSchedule";
@@ -58,6 +57,7 @@ export default function MealCalendar({
   overrides,
   mealLogs,
   onEditLog,
+  onLogMeal,
   onAddSession,
   saveSessionTime,
   onSaved
@@ -73,6 +73,9 @@ export default function MealCalendar({
   /* DUO-40: geloggte Mahlzeiten/Snacks als Chips im Raster. */
   mealLogs: MealLog[];
   onEditLog: (log: MealLog) => void;
+  /* Finetuning Item-Logging: geplanten Anlass antippen = Item-Liste
+   * ("was hast du gegessen") statt Tages-Editor. */
+  onLogMeal: (dateIso: string, slot: MealSlotPlan) => void;
   /* DUO-46: Training/Event an beliebigem Datum anlegen. */
   onAddSession: (dateIso: string) => void;
   /* DUO-42: Trainingszeit aus dem Tages-Editor heraus speichern. */
@@ -82,7 +85,6 @@ export default function MealCalendar({
   const [dayOffset, setDayOffset] = useState(0);
   const [editDate, setEditDate] = useState<string | null>(null);
   const [showMonth, setShowMonth] = useState(false);
-  const [mealAction, setMealAction] = useState<{ dateIso: string; dateLabel: string; slot: MealSlotPlan } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -140,12 +142,19 @@ export default function MealCalendar({
     const sessionEvents = timed.map((s) => ({ hour: Math.max(HOURS[0], hourOf(s.session_start ?? "")), s }));
     const untimed = ds.filter((s) => !s.session_start);
     /* DUO-40: geloggte Mahlzeiten und Snacks gehoeren in die Kalender-
-     * Timeline (gleiche Daten wie auf der Home-Seite). */
-    const logEvents = mealLogs
-      .filter((l) => l.log_date === iso)
+     * Timeline (gleiche Daten wie auf der Home-Seite). Slot-verknuepfte
+     * Sammel-Logs (Item-Logging) nicht doppelt zeigen - ihr Status
+     * steht auf dem geplanten Chip. */
+    const daySlotLogs = new Map<string, MealLog>();
+    const dayLogs = mealLogs.filter((l) => l.log_date === iso);
+    for (const l of dayLogs) {
+      if (l.slot_time) daySlotLogs.set(l.slot_time, l);
+    }
+    const logEvents = dayLogs
+      .filter((l) => !(l.slot_time && mealEvents.some((e) => e.time === l.slot_time)))
       .map((l) => ({ hour: Math.max(HOURS[0], hourOf(hhmmFromIso(l.created_at))), log: l }));
 
-    return { iso, weekday, num: d.getDate(), isToday: iso === todayIso, dayType, ds, untimed, plan, mealEvents, sessionEvents, logEvents };
+    return { iso, weekday, num: d.getDate(), isToday: iso === todayIso, dayType, ds, untimed, plan, mealEvents, sessionEvents, logEvents, daySlotLogs };
   });
 
   /* DUO-39: Monatsuebersicht - Monat des Anker-Tags, Navigation durch
@@ -190,30 +199,6 @@ export default function MealCalendar({
       setError(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
     }
     setBusy(false);
-  };
-
-  /* DUO-40: geplanten Anlass nachtraeglich als gegessen loggen. */
-  const logPlannedMeal = async () => {
-    if (!mealAction) return;
-    const slot = mealAction.slot;
-    setBusy(true);
-    setError("");
-    const { error: logError } = await supabase.from("meal_logs").insert({
-      log_date: mealAction.dateIso,
-      logged_ms: 0,
-      name: slot.label,
-      phase: slot.relation === "pre" ? "pre" : slot.relation === "post" ? "post" : "snack",
-      carbs_g: slot.carbsG,
-      protein_g: slot.proteinG,
-      fat_g: 0
-    });
-    setBusy(false);
-    if (logError) {
-      setError(logError.message);
-      return;
-    }
-    setMealAction(null);
-    onSaved();
   };
 
   return (
@@ -359,23 +344,30 @@ export default function MealCalendar({
                         </button>
                       );
                     })}
-                    {meals.map((e) => (
-                      <button
-                        type="button"
-                        className="calev calev-meal"
-                        key={e.time + e.label}
-                        onClick={() => {
-                          const dateLabel = new Date(day.iso + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
-                          setMealAction({ dateIso: day.iso, dateLabel, slot: e.slot });
-                        }}
-                        title="Antippen: als gegessen loggen oder den Tag anpassen"
-                      >
-                        <span className="calev-time">{e.time}</span>
-                        <span className={"calev-dot " + e.color} />
-                        <span className="calev-label">{e.label}</span>
-                        <span className="calev-target">≈ {e.carbsG} g KH</span>
-                      </button>
-                    ))}
+                    {meals.map((e) => {
+                      const logged = day.daySlotLogs.get(e.time);
+                      const done = !!(logged && e.carbsG > 0 && Number(logged.carbs_g) >= e.carbsG * 0.9 && Number(logged.carbs_g) <= e.carbsG * 1.1);
+                      return (
+                        <button
+                          type="button"
+                          className={"calev calev-meal" + (done ? " calev-done" : "")}
+                          key={e.time + e.label}
+                          onClick={() => onLogMeal(day.iso, e.slot)}
+                          title="Antippen: erfassen, was du gegessen hast (Liste) – Summe gegen das Ziel"
+                        >
+                          <span className="calev-time">{e.time}</span>
+                          <span className={"calev-dot " + e.color} />
+                          <span className="calev-label">{done ? "✓ " : ""}{e.label}</span>
+                          <span className="calev-target">
+                            {done
+                              ? Math.round(Number(logged?.carbs_g)) + " g erfasst"
+                              : logged
+                                ? "≈ " + e.carbsG + " g KH · " + Math.round(Number(logged.carbs_g)) + " g erfasst"
+                                : "≈ " + e.carbsG + " g KH"}
+                          </span>
+                        </button>
+                      );
+                    })}
                     {logs.map((e) => (
                       <button
                         type="button"
@@ -412,36 +404,6 @@ export default function MealCalendar({
               onSaveSessionTime={saveSessionTime}
               onClose={() => setEditDate(null)}
             />
-            {error ? <p className="error">{error}</p> : null}
-          </div>
-        </>
-      ) : null}
-
-      {mealAction ? (
-        <>
-          <div className="sheet-backdrop" onClick={() => setMealAction(null)} />
-          <div className="sheet">
-            <h2 style={{ margin: 0 }}>{mealAction.slot.label}</h2>
-            <p className="muted mse-hint">
-              {mealAction.dateLabel} · {mealAction.slot.time} Uhr · Ziel ≈ {mealAction.slot.carbsG} g KH und {mealAction.slot.proteinG} g Protein.
-              Gegessen wie geplant? Dann logge den Anlass – auch nachträglich. Oder passe den Tag an.
-            </p>
-            <div className="mse-actions">
-              <button type="button" onClick={logPlannedMeal} disabled={busy}>
-                {busy ? "Speichere ..." : "Als gegessen loggen"}
-              </button>
-              <button
-                type="button"
-                className="link"
-                onClick={() => {
-                  const d = mealAction.dateIso;
-                  setMealAction(null);
-                  setEditDate(d);
-                }}
-              >
-                Tag anpassen
-              </button>
-            </div>
             {error ? <p className="error">{error}</p> : null}
           </div>
         </>

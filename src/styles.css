@@ -349,3 +349,38 @@ button.mealtile:hover { filter: brightness(1.18); }
 /* ===== DUO-41: Race-Day-Paket - Renntag-Button neben dem Capture-Button, Wizard im Sheet ===== */
 .homecapture { gap: 10px; flex-wrap: wrap; }
 .racebtn svg { background: #f59e0b; }
+
+/* ===== Finetuning: Mahlzeit-Logging als Item-Liste mit Ziel-Abgleich ===== */
+.fill-red { background: linear-gradient(90deg, #b91c1c, #f87171); }
+/* Slot-Tile-Status (Home-Timeline) */
+.slottile.done { border-style: solid; border-color: #22c55e; background: rgba(34, 197, 94, 0.08); }
+.slottile.partial { border-style: solid; border-color: #fbbf24; background: rgba(251, 191, 36, 0.06); }
+.slottile-adj { color: #93c5fd; }
+/* Kalender-Chip: Mahlziel erreicht */
+.calev-done { background: rgba(34, 197, 94, 0.18); border-color: #22c55e; }
+.calev-done .calev-label { color: #4ade80; }
+/* Mahlzeit-Logger (Sheet) */
+.mlg { margin-top: 4px; }
+.mlg-time { color: #64748b; font-size: 14px; font-weight: 400; font-family: "JetBrains Mono", monospace; }
+.mlg-hint { margin: 8px 0 10px; font-size: 12px; }
+.mlg-target { background: #0f172a; border: 1px solid #263346; border-radius: var(--radius-inner); padding: 10px 12px; margin-bottom: 10px; }
+.mlg-target.ok { border-color: #22c55e; }
+.mlg-target.over { border-color: #f87171; }
+.mlg-target-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mlg-target-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+.mlg-target-val { font-size: 12px; color: #cbd5e1; font-family: "JetBrains Mono", monospace; }
+.mlg-target.ok .mlg-target-val { color: #4ade80; }
+.mlg-target.over .mlg-target-val { color: #f87171; }
+.mlg-track { margin: 8px 0; height: 8px; }
+.mlg-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mlg-item { display: flex; align-items: center; gap: 10px; background: #1e293b; border: 1px solid #263346; border-radius: var(--radius-inner); padding: 8px 10px; }
+.mlg-item-name { flex: 1; font-size: 13px; font-weight: 600; color: #e2e8f0; }
+.mlg-item-macros { font-size: 12px; color: #94a3b8; font-family: "JetBrains Mono", monospace; }
+.mlg-del { margin: 0; flex: none; min-height: 32px; min-width: 32px; padding: 4px 8px; background: transparent; border: 1px solid #334155; color: #94a3b8; font-size: 16px; line-height: 1; }
+.mlg-del:hover { border-color: #f87171; color: #f87171; filter: none; }
+.mlg-form { border-top: 1px solid #263346; padding-top: 10px; }
+.mlg-form-name { margin-bottom: 8px; }
+.mlg-form-macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.mlg-form-macros input { width: 100%; }
+.mlg-actions { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+.mlg-actions .link { margin-top: 0; }

@@ -19,6 +19,8 @@ import BottomNav from "./components/BottomNav";
 import MealCalendar from "./components/MealCalendar";
 import MealDayEditor, { type MealEditScope } from "./components/MealDayEditor";
 import MealLogEditor from "./components/MealLogEditor";
+import MealLogger from "./components/MealLogger";
+import type { MealSlotPlan } from "./lib/fueling";
 import StravaSync from "./components/StravaSync";
 import Onboarding from "./components/Onboarding";
 import { consumeHandoff } from "./lib/strava";
@@ -43,6 +45,9 @@ export default function App() {
   const [sessionFormDate, setSessionFormDate] = useState(localIso());
   const [editDate, setEditDate] = useState<string | null>(null);
   const [editLog, setEditLog] = useState<MealLog | null>(null);
+  /* Finetuning Item-Logging: geplante Mahlzeit antippen = "was hast du
+   * gegessen"-Liste mit Ziel-Abgleich (+-10 % = abgehakt). */
+  const [logMeal, setLogMeal] = useState<{ dateIso: string; slot: MealSlotPlan } | null>(null);
   const [editError, setEditError] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [status, setStatus] = useState("");
@@ -224,6 +229,10 @@ export default function App() {
                 setEditError("");
                 setEditLog(log);
               }}
+              onLogMeal={(slot) => {
+                setEditError("");
+                setLogMeal({ dateIso: selectedDate, slot });
+              }}
             />
             <div className="homecapture">
               <button
@@ -277,6 +286,10 @@ export default function App() {
             onEditLog={(log) => {
               setEditError("");
               setEditLog(log);
+            }}
+            onLogMeal={(iso, slot) => {
+              setEditError("");
+              setLogMeal({ dateIso: iso, slot });
             }}
             onAddSession={(iso) => {
               setSessionFormDate(iso);
@@ -417,6 +430,24 @@ export default function App() {
                 load();
               }}
               onClose={() => setEditLog(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
+      {logMeal ? (
+        <>
+          <div className="sheet-backdrop" onClick={() => setLogMeal(null)} />
+          <div className="sheet">
+            <MealLogger
+              dateIso={logMeal.dateIso}
+              slot={logMeal.slot}
+              onClose={() => setLogMeal(null)}
+              onChanged={load}
+              onEditDay={() => {
+                setEditError("");
+                setEditDate(logMeal.dateIso);
+              }}
             />
           </div>
         </>

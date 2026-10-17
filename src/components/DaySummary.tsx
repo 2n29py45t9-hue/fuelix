@@ -95,7 +95,8 @@ export default function DaySummary({
   overrides = [],
   onSelectSession,
   onEditDay,
-  onEditLog
+  onEditLog,
+  onLogMeal
 }: {
   date: string;
   sessions: TrainingSession[];
@@ -107,6 +108,9 @@ export default function DaySummary({
   onSelectSession: (s: TrainingSession) => void;
   onEditDay: () => void;
   onEditLog: (log: MealLog) => void;
+  /* Finetuning Item-Logging: geplante Mahlzeit antippen = "was hast du
+   * gegessen" (Item-Liste), NICHT der Tages-Editor (dafuer ist der Button). */
+  onLogMeal: (slot: MealSlotPlan) => void;
 }) {
   const [openSession, setOpenSession] = useState<string | null>(null);
 
@@ -243,9 +247,36 @@ export default function DaySummary({
   const feed: FeedItem[] = [
     ...(mealPlan ? mealPlan.slots.map((s) => ({ kind: "slot" as const, time: s.time, slot: s })) : []),
     ...fuelingItems,
-    ...logsToday.map((l) => ({ kind: "meal" as const, time: hhmmFromIso(l.created_at), log: l })),
+    /* Slot-verknuepfte Sammel-Logs erscheinen IM Slot-Tile mit Status -
+     * sonst wuerde die Mahlzeit doppelt in der Timeline stehen. */
+    ...logsToday
+      .filter((l) => !(l.slot_time && mealPlan && mealPlan.slots.some((s) => s.time === l.slot_time)))
+      .map((l) => ({ kind: "meal" as const, time: hhmmFromIso(l.created_at), log: l })),
     ...todays.map((s) => ({ kind: "session" as const, time: s.session_start || "", session: s }))
   ].sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+
+  /* Item-Logging: Sammel-Log pro geplanter Mahlzeit (via slot_time). */
+  const slotLogs = new Map<string, MealLog>();
+  for (const l of logsToday) {
+    if (l.slot_time) slotLogs.set(l.slot_time, l);
+  }
+  /* Status eines Anlasses: abgehakt bei +-10 % des KH-Ziels. */
+  const slotState = (slot: MealSlotPlan) => {
+    const log = slotLogs.get(slot.time);
+    if (!log) return { logged: null as number | null, done: false };
+    const loggedCarbs = Number(log.carbs_g);
+    const done = slot.carbsG > 0 && loggedCarbs >= slot.carbsG * 0.9 && loggedCarbs <= slot.carbsG * 1.1;
+    return { logged: loggedCarbs, done };
+  };
+  /* Reallocation: wenn was fehlt, zeigen spaetere Anlaesse das neu
+   * berechnete Ziel (aus reallocPlan, gleiche Hexis-Logik wie der
+   * "Naechster Anlass"-Block). */
+  const adjFor = (slot: MealSlotPlan) => {
+    if (!reallocPlan) return null;
+    const adj = reallocPlan.slots.find((s) => s.time === slot.time);
+    if (!adj) return null;
+    return adj.carbsG !== slot.carbsG ? adj : null;
+  };
 
   const dateLabel = isToday
     ? "Heute"
@@ -368,32 +399,47 @@ export default function DaySummary({
 
       <div className="timeline">
         <span className="timeline-title">
-          Timeline <Tip text="Dein Tag im Überblick: gestrichelte Kacheln sind geplant – graue aus deiner Routine mit Ziel (Farbe = KH-Betonung), blaue sind Fueling-Fenster um deine Einheit (Vor / Während / Danach). Tippe eine gestrichelte Kachel an, um den Tag anzupassen; tippe eine ausgefüllte Kachel an, um den Log zu bearbeiten oder zu löschen. Mahlzeiten mit Einheits-Bezug tragen einen blauen Verweis, z. B. Frühstück → Laufen. Log-Farben: Blau = vor der Einheit, Gelb = während, Grün = danach, Grau = Snack/sonstige." />
+          Timeline <Tip text="Dein Tag im Überblick: gestrichelte Kacheln sind geplant – graue aus deiner Routine mit Ziel (Farbe = KH-Betonung), blaue sind Fueling-Fenster um deine Einheit (Vor / Während / Danach). Tippe eine geplante Mahlzeit an und erfasse als Liste, was du gegessen hast – die Summe wird gegen das Mahlzeit-Ziel gerechnet, bei ±10 % ist die Mahlzeit abgehakt (✓); fehlt etwas, werden die übrigen Anlässe neu berechnet (neu: ≈ X g KH). Tippe eine ausgefüllte Kachel an, um den Log zu bearbeiten oder zu löschen. Mahlzeiten mit Einheits-Bezug tragen einen blauen Verweis, z. B. Frühstück → Laufen. Log-Farben: Blau = vor der Einheit, Gelb = während, Grün = danach, Grau = Snack/sonstige." />
         </span>
         {feed.length === 0 ? (
           <span className="muted timeline-empty">Noch nichts an diesem Tag – tippe unten auf + zum Loggen.</span>
         ) : (
           <div className="feed">
             {feed.map((f, i) =>
-              f.kind === "slot" ? (
-                <div className="feedrow" key={"p" + i + f.slot.time}>
-                  <span className="feedtime">{f.slot.time}</span>
-                  <button
-                    type="button"
-                    className="slottile"
-                    onClick={onEditDay}
-                    title="Anlass anpassen – nur dieser Tag oder ab jetzt jede Wiederholung"
-                  >
-                    <span className={"calslot-dot " + f.slot.color} />
-                    <span className="tile-name">{f.slot.label}</span>
-                    {f.slot.sessionLabel ? (
-                      <span className="slottile-link">→ {f.slot.sessionLabel} {f.slot.sessionTime}</span>
-                    ) : null}
-                    <span className="slottile-target">Ziel ≈ {f.slot.carbsG} g KH · {f.slot.proteinG} g P</span>
-                    <Tip text={f.slot.explanation !== "" ? f.slot.explanation : "Geplanter Anlass aus deiner Routine – periodisiert gegen dein Training. Antippen zum Anpassen."} />
-                  </button>
-                </div>
-              ) : f.kind === "meal" ? (
+              f.kind === "slot" ? (() => {
+                const st = slotState(f.slot);
+                const adj = adjFor(f.slot);
+                return (
+                  <div className="feedrow" key={"p" + i + f.slot.time}>
+                    <span className="feedtime">{f.slot.time}</span>
+                    <button
+                      type="button"
+                      className={"slottile" + (st.done ? " done" : st.logged !== null ? " partial" : "")}
+                      onClick={() => onLogMeal(f.slot)}
+                      title="Antippen: erfassen, was du gegessen hast – die Summe wird gegen das Ziel gerechnet"
+                    >
+                      <span className={"calslot-dot " + f.slot.color} />
+                      <span className="tile-name">{st.done ? "✓ " : ""}{f.slot.label}</span>
+                      {f.slot.sessionLabel ? (
+                        <span className="slottile-link">→ {f.slot.sessionLabel} {f.slot.sessionTime}</span>
+                      ) : null}
+                      {st.logged !== null ? (
+                        <span className="slottile-target">
+                          {st.done
+                            ? Math.round(st.logged) + " g KH erfasst – Ziel erreicht"
+                            : Math.round(st.logged) + " g erfasst – noch " + Math.max(0, Math.round(f.slot.carbsG - st.logged)) + " g KH"}
+                        </span>
+                      ) : (
+                        <span className="slottile-target">
+                          Ziel ≈ {f.slot.carbsG} g KH · {f.slot.proteinG} g P
+                          {adj ? <span className="slottile-adj"> (neu: ≈ {adj.carbsG} g KH)</span> : null}
+                        </span>
+                      )}
+                      <Tip text={f.slot.explanation !== "" ? f.slot.explanation : "Geplanter Anlass aus deiner Routine – periodisiert gegen dein Training. Antippen und als Liste erfassen, was du gegessen hast; die Summe wird gegen das Ziel gerechnet (±10 % = abgehakt)."} />
+                    </button>
+                  </div>
+                );
+              })() : f.kind === "meal" ? (
                 <div className="feedrow" key={"m" + i}>
                   <span className="feedtime">{f.time}</span>
                   <button

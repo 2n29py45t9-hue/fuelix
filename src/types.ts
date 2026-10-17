@@ -70,7 +70,23 @@ export interface MealLog {
   fat_g: number;
   logged_ms?: number | null;
   created_at?: string;
+  /* Finetuning Item-Logging: verknuepft den Sammel-Log mit dem geplanten
+   * Anlass (Uhrzeit) im Raster - die Items der Mahlzeit liegen in
+   * meal_log_items. */
+  slot_time?: string | null;
 }
+
+/* Ein einzelnes Lebensmittel innerhalb einer geloggten Mahlzeit. */
+export interface MealLogItem {
+  id: string;
+  log_id: string;
+  name: string;
+  carbs_g: number;
+  protein_g: number;
+  fat_g: number;
+  created_at?: string;
+}
+
 
 // Race-Day-Wizard (DUO-29)
 export interface RaceDayPhase {
