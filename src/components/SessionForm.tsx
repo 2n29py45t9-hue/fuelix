@@ -3,8 +3,8 @@ import { supabase } from "../lib/supabase";
 import { localIso } from "../lib/date";
 import type { TrainingSession } from "../types";
 
-export default function SessionForm({ defaultSport, onCreated }: { defaultSport?: string; onCreated: (s: TrainingSession) => void }) {
-  const [sessionDate, setSessionDate] = useState(localIso());
+export default function SessionForm({ defaultSport, defaultDate, onCreated }: { defaultSport?: string; defaultDate?: string; onCreated: (s: TrainingSession) => void }) {
+  const [sessionDate, setSessionDate] = useState(defaultDate ?? localIso());
   const [sessionStart, setSessionStart] = useState("");
   const [sport, setSport] = useState(defaultSport ?? "Radsport");
   const [durationMin, setDurationMin] = useState(90);
@@ -18,6 +18,11 @@ export default function SessionForm({ defaultSport, onCreated }: { defaultSport?
   useEffect(() => {
     if (defaultSport) setSport(defaultSport);
   }, [defaultSport]);
+
+  // DUO-46: Datum vorgeben (z. B. aus dem Kalender fuer Termine in der Zukunft).
+  useEffect(() => {
+    if (defaultDate) setSessionDate(defaultDate);
+  }, [defaultDate]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

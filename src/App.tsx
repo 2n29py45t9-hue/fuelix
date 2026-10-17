@@ -39,6 +39,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("plan");
   const [logSheet, setLogSheet] = useState(false);
   const [sessionSheet, setSessionSheet] = useState(false);
+  const [sessionFormDate, setSessionFormDate] = useState(localIso());
   const [editDate, setEditDate] = useState<string | null>(null);
   const [editLog, setEditLog] = useState<MealLog | null>(null);
   const [editError, setEditError] = useState("");
@@ -123,6 +124,17 @@ export default function App() {
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
     }
+  };
+
+  // DUO-42: Trainingszeit aus dem "Tag anpassen"-Editor speichern -
+  // verschiebt die Einheit im Kalender-Raster, Fueling rechnet neu.
+  const saveSessionTime = async (sessionId: string, time: string) => {
+    const { error } = await supabase.from("sessions").update({ session_start: time === "" ? null : time }).eq("id", sessionId);
+    if (error) {
+      setEditError(error.message);
+      return;
+    }
+    load();
   };
 
   const plan: FuelingPlan | null = selected
@@ -216,7 +228,10 @@ export default function App() {
               <button
                 type="button"
                 className="capturebtn"
-                onClick={() => setSessionSheet(true)}
+                onClick={() => {
+                  setSessionFormDate(selectedDate);
+                  setSessionSheet(true);
+                }}
                 aria-label="Training manuell erfassen"
                 title="Training manuell erfassen – dein Plan erscheint sofort"
               >
@@ -245,6 +260,16 @@ export default function App() {
             birthYear={birthYear}
             mealSchedule={mealSchedule}
             overrides={mealOverrides}
+            mealLogs={mealLogs}
+            onEditLog={(log) => {
+              setEditError("");
+              setEditLog(log);
+            }}
+            onAddSession={(iso) => {
+              setSessionFormDate(iso);
+              setSessionSheet(true);
+            }}
+            saveSessionTime={saveSessionTime}
             onSaved={load}
           />
         ) : null}
@@ -321,6 +346,7 @@ export default function App() {
           <div className="sheet">
             <SessionForm
               defaultSport={mainSport}
+              defaultDate={sessionFormDate}
               onCreated={(s) => {
                 setSelected(s);
                 setSelectedDate(s.session_date);
@@ -340,7 +366,9 @@ export default function App() {
               dateIso={editDate}
               mealSchedule={mealSchedule}
               overrides={mealOverrides}
+              sessions={sessions.filter((s) => s.session_date === editDate)}
               onSave={saveDay}
+              onSaveSessionTime={saveSessionTime}
               onClose={() => setEditDate(null)}
             />
             {editError ? <p className="error">{editError}</p> : null}

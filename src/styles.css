@@ -311,3 +311,37 @@ button.slottile:hover { border-color: #22c55e; filter: none; }
 button.mealtile:hover { filter: brightness(1.18); }
 
 
+
+/* ===== DUO-39/40/42/46: Kalender-Paket - Monatsuebersicht, Dauer-Bloecke, Log-Chips, Tag-Editor ===== */
+.ds-navbtn.on { border: 1px solid #22c55e; color: #4ade80; border-radius: 8px; }
+/* DUO-46: "+ Termin" an beliebigem Datum */
+.cal-addbtn { margin: 0; min-height: 32px; padding: 4px 10px; background: #0b1220; border: 1px dashed #334155; color: #94a3b8; font-size: 12px; font-weight: 600; }
+.cal-addbtn:hover { border-color: #22c55e; color: #4ade80; filter: none; }
+/* DUO-39: aufklappbare Monatsuebersicht (Notion-Style) */
+.mgrid { margin-top: 10px; border-top: 1px solid #263346; padding-top: 10px; }
+.mgrid-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.mgrid-title { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+.mgrid-weekdays, .mgrid-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.mgrid-weekdays { margin-top: 8px; }
+.mgrid-weekdays span { font-size: 10px; color: #64748b; text-align: center; font-family: "JetBrains Mono", monospace; }
+.mgrid-day { margin: 0; min-height: 34px; padding: 4px 2px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #cbd5e1; font-size: 12px; font-weight: 400; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; }
+.mgrid-day:hover { border-color: #22c55e; filter: none; }
+.mgrid-day.today { background: #22c55e; color: #052e16; font-weight: 700; }
+.mgrid-day.anchor { border-color: rgba(34, 197, 94, 0.6); }
+.mgrid-dot { width: 5px; height: 5px; border-radius: 999px; }
+.mgrid-dot.load { background: #3b82f6; }
+.mgrid-dot.race { background: #f97316; }
+.mgrid-dot.rest { background: #64748b; }
+/* DUO-40: feste Stundenzeilen - Trainingsbloecke spannen die volle Dauer */
+.cal3-grid .cal3-cell:not(.cal3-allday) { height: 52px; min-height: 52px; overflow: visible; }
+.calev-block { position: relative; z-index: 3; overflow: hidden; flex-wrap: nowrap; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 2px; }
+.calev-block:hover { filter: brightness(1.15); }
+/* DUO-40: geloggte Mahlzeiten/Snacks als Chips (Hintergrund via tile-pre/during/post/snack) */
+.calev-log { border-color: #334155; }
+.calev-log:hover { border-color: #94a3b8; filter: none; }
+/* DUO-42: Trainingszeiten im Tages-Editor */
+.mse-train { margin: 12px 0; border-top: 1px solid #263346; padding-top: 10px; }
+.mse-train-title { display: block; font-size: 13px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; }
+.mse-train-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.mse-train-row input { width: 110px; }
+.mse-train-name { font-size: 13px; color: #e2e8f0; }

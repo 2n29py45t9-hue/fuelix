@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { MealSlotInput } from "../lib/fueling";
 import { slotsForDate, WEEKDAY_LONG } from "../lib/schedule";
 import { weekdayIndexMondayFirst } from "../lib/date";
-import type { MealOverride, MealSlot } from "../types";
+import type { MealOverride, MealSlot, TrainingSession } from "../types";
 
 /*
  * Tages-Editor (DUO-36): Mahlzeiten EINES konkreten Datums anpassen -
@@ -18,15 +18,20 @@ export default function MealDayEditor({
   dateIso,
   mealSchedule,
   overrides,
+  sessions = [],
   busy = false,
   onSave,
+  onSaveSessionTime,
   onClose
 }: {
   dateIso: string;
   mealSchedule: MealSlot[];
   overrides: MealOverride[];
+  /* DUO-42: "Tag anpassen" umfasst auch die Trainingszeiten des Tages. */
+  sessions?: TrainingSession[];
   busy?: boolean;
   onSave: (slots: MealSlotInput[], scope: MealEditScope) => void;
+  onSaveSessionTime?: (sessionId: string, time: string) => void;
   onClose?: () => void;
 }) {
   const initial = slotsForDate(mealSchedule, overrides, dateIso);
@@ -92,6 +97,28 @@ export default function MealDayEditor({
         <p className="muted mse-hint">
           Kein Anlass an diesem Tag - beim Speichern gilt danach wieder deine {WEEKDAY_LONG[weekday]}-Routine.
         </p>
+      ) : null}
+
+      {sessions.length > 0 ? (
+        <div className="mse-train">
+          <span className="mse-train-title">Trainingszeiten</span>
+          {sessions.map((s) => (
+            <div className="mse-train-row" key={s.id ?? s.sport}>
+              <input
+                type="time"
+                value={s.session_start ?? ""}
+                onChange={(e) => {
+                  if (onSaveSessionTime && s.id) onSaveSessionTime(s.id, e.target.value);
+                }}
+                aria-label={"Startzeit von " + s.sport}
+              />
+              <span className="mse-train-name">{s.sport} · {s.duration_min} min</span>
+            </div>
+          ))}
+          <p className="muted mse-hint">
+            Startzeit ändern verschiebt die Einheit im Kalender-Raster – Fueling-Fenster und Mahlzeit-Ziele rechnen neu.
+          </p>
+        </div>
       ) : null}
 
       <div className="ov-scopes">
