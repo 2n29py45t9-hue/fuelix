@@ -268,3 +268,46 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #334155; }
 .mse-actions { display: flex; gap: 16px; margin-top: 10px; }
 .mse-actions .link { margin-top: 0; }
 
+/* ===== DUO-38/43/44/45: Home-Paket - Ringe, Trainingskarte, Heute-Button, Mini-Ringe, Capture-Button ===== */
+/* Kopfzeile der Tages-Summary mit "Tag anpassen" */
+.sumhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.sumhead h2 { margin: 0; }
+.sumhead-edit { margin: 0; flex: none; min-height: 36px; padding: 6px 12px; background: #0f172a; border: 1px solid #334155; color: #cbd5e1; font-size: 12px; font-weight: 600; }
+.sumhead-edit:hover { border-color: #22c55e; color: #4ade80; filter: none; }
+/* Trainingskarte (DUO-38) */
+.traincard { background: #0f172a; border-radius: var(--radius-inner); padding: 10px 12px; margin: 12px 0 4px; }
+.traincard-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.traincard-title { font-size: 13px; font-weight: 700; color: #cbd5e1; }
+.traincard-sum { font-size: 12px; color: #94a3b8; }
+.trainrows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.trainrow { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.trainrow-when { flex: none; width: 40px; color: #64748b; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.trainrow-name { flex: 1; color: #e2e8f0; }
+.trainrow-edit { margin: 0; flex: none; min-height: 32px; padding: 4px 10px; background: #1e293b; border: 1px solid #334155; color: #cbd5e1; font-size: 12px; font-weight: 600; }
+.trainrow-edit:hover { border-color: #22c55e; color: #4ade80; filter: none; }
+/* Fortschrittsringe (DUO-38, Apple-Health-Stil) */
+.rings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 6px; }
+.ring { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.ringwrap { position: relative; width: 84px; height: 84px; }
+.ring-track { stroke: #263346; }
+.ring-pct { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 15px; font-weight: 700; color: #e2e8f0; font-family: "JetBrains Mono", monospace; }
+.ring-label { font-size: 12px; color: #cbd5e1; font-weight: 600; }
+.ring-rest { font-size: 11px; color: #94a3b8; font-family: "JetBrains Mono", monospace; }
+@media (max-width: 360px) { .rings { grid-template-columns: 1fr; } .ring { flex-direction: row; justify-content: center; gap: 10px; } .ring-label, .ring-rest { text-align: left; } }
+/* Heute-Button + Mini-Ringe im Wochen-Scroller (DUO-44) */
+.ds-today { margin: 0; min-height: 32px; padding: 4px 12px; background: #22c55e; color: #052e16; font-size: 12px; font-weight: 700; border-radius: 999px; }
+.ds-today.on { outline: 2px solid rgba(34, 197, 94, 0.45); outline-offset: 1px; }
+.ds-today:hover { filter: brightness(1.08); }
+.ds-miniring { margin-top: 1px; }
+/* Dezentter runder Erfassen-Button (DUO-43, Fallback statt grossem Formular) */
+.homecapture { display: flex; justify-content: center; margin: 4px 0 var(--gap-3); }
+.capturebtn { margin: 0; display: inline-flex; align-items: center; gap: 10px; min-height: 40px; padding: 7px 16px 7px 8px; background: transparent; border: 1px dashed #334155; border-radius: 999px; color: #94a3b8; font-size: 13px; font-weight: 600; }
+.capturebtn:hover { border-color: #22c55e; color: #4ade80; filter: none; }
+.capturebtn svg { background: #22c55e; color: #052e16; border-radius: 999px; padding: 5px; width: 26px; height: 26px; }
+/* Timeline-Kacheln klickbar (DUO-45) - Button-Resets gegen globale Button-Styles */
+button.slottile, button.mealtile { margin: 0; flex: 1; min-height: 0; text-align: left; cursor: pointer; font-weight: 400; }
+button.slottile { background: transparent; }
+button.slottile:hover { border-color: #22c55e; filter: none; }
+button.mealtile:hover { filter: brightness(1.18); }
+
+

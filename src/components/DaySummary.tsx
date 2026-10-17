@@ -2,9 +2,18 @@ import { useState } from "react";
 import { ageFromBirthYear, buildCarbAmpel, buildRedsWarnings, calculateFuelingPlan, dailyTargetsFor, dayTypeFor, dayTypeLabel, energyBalanceFor, estimateDailyEnergyNeed, isYouthAthlete, mealPlanFor, reallocateMealPlan, restOfDayPhase, sessionFuelingCheckpoints, type FuelingCheckpoint, type MealSlotPlan } from "../lib/fueling";
 import { hhmmFromIso, hhmmNow, localIso, minutesFromHHMM } from "../lib/date";
 import { slotsForDate } from "../lib/mealSchedule";
-import CarbAmpel from "./CarbAmpel";
 import Tip from "./Tip";
 import type { CarbAmpelPhase, MealLog, MealOverride, MealPhase, MealSlot, TrainingSession } from "../types";
+
+/*
+ * Home / Tages-Summary. DUO-38: grosse Fortschrittsringe im
+ * Apple-Health-Stil (KH / Protein / Energie) inkl. "wie viel noch fehlt".
+ * DUO-43: Redundanz entfernt - die Carb-Ampel-Dopplung unten ist weg
+ * (der volle Plan lebt in der PlanCard), das Tages-Tracking steckt in
+ * den Ringen und der Timeline. DUO-45: Timeline = Kalender - jede
+ * Kachel ist anippbar: geplante Anlaesse und Logs lassen sich direkt
+ * bearbeiten ("Tag anpassen"), Einheiten oeffnen ihren Plan.
+ */
 
 const phaseText: Record<MealPhase, string> = {
   pre: "Vor der Einheit",
@@ -15,21 +24,38 @@ const phaseText: Record<MealPhase, string> = {
 
 const intensityText = (i: string) => (i === "high" ? "Hoch" : i === "moderate" ? "Mittel" : "Leicht");
 
-function Bar({ value, max, label, unit, explain }: { value: number; max: number; label: string; unit: string; explain: string }) {
-  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+/* DUO-38: Fortschrittsring - SVG-Donut mit Bogen nach Fortschritt. */
+const RING_R = 34;
+const RING_C = 2 * Math.PI * RING_R;
+
+function Ring({ pct, color, label, rest, explain }: { pct: number; color: string; label: string; rest: string; explain: string }) {
+  const p = Math.max(0, Math.min(100, pct));
+  const offset = RING_C * (1 - p / 100);
   return (
-    <div className="macrobar">
-      <div className="macrobar-head">
-        <span className="macrobar-label">
-          {label} <Tip text={explain} />
-        </span>
-        <span className="macrobar-value">
-          <strong>{Math.round(value)}</strong> / {Math.round(max)} {unit}
-        </span>
+    <div className="ring">
+      <div className="ringwrap">
+        <svg viewBox="0 0 84 84" width="84" height="84" aria-hidden="true">
+          <circle className="ring-track" cx="42" cy="42" r={RING_R} strokeWidth="10" fill="none" />
+          <circle
+            className="ring-arc"
+            cx="42"
+            cy="42"
+            r={RING_R}
+            stroke={color}
+            strokeWidth="10"
+            fill="none"
+            strokeDasharray={RING_C}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            transform="rotate(-90 42 42)"
+          />
+        </svg>
+        <span className="ring-pct">{Math.round(p)}%</span>
       </div>
-      <div className="track">
-        <div className={"fill" + (pct >= 100 ? " fill-green" : pct >= 60 ? " fill-amber" : "")} style={{ width: pct + "%" }} />
-      </div>
+      <span className="ring-label">
+        {label} <Tip text={explain} />
+      </span>
+      <span className="ring-rest">{rest}</span>
     </div>
   );
 }
@@ -67,7 +93,9 @@ export default function DaySummary({
   birthYear = "",
   mealSchedule = [],
   overrides = [],
-  onSelectSession
+  onSelectSession,
+  onEditDay,
+  onEditLog
 }: {
   date: string;
   sessions: TrainingSession[];
@@ -77,6 +105,8 @@ export default function DaySummary({
   mealSchedule?: MealSlot[];
   overrides?: MealOverride[];
   onSelectSession: (s: TrainingSession) => void;
+  onEditDay: () => void;
+  onEditLog: (log: MealLog) => void;
 }) {
   const [openSession, setOpenSession] = useState<string | null>(null);
 
@@ -137,6 +167,8 @@ export default function DaySummary({
     }
   }
 
+  // Fueling-Phasen nur noch fuer den naechsten Schritt - die Ampel-Dopplung
+  // unten ist weg, der volle Plan lebt in der PlanCard (DUO-43).
   const phases: CarbAmpelPhase[] = longestSession
     ? [
         ...buildCarbAmpel({
@@ -219,19 +251,27 @@ export default function DaySummary({
     ? "Heute"
     : new Date(date + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" });
 
-  const glycogenTip = youth
-    ? "Füllstand der Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Jugend-Ziel – im Wachstum höher angesetzt (Ruhetag 5, Belastungstag 7, Wettkampftag 8 g/kg) und nie stark gedrosselt (RED-S-Schutz)."
-    : "Füllstand deiner Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Ziel – periodisiert nach Trainingsbelastung (Ruhetag 4, Belastungstag 6, Wettkampftag 8 g/kg).";
-
-  const carbsExplain = youth
-    ? "Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g. Jugend-Modus: höhere Ziele wegen Wachstum und RED-S-Schutz."
-    : "Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g. Das Ziel wechselt täglich mit der Belastung (Carb Coding).";
+  // DUO-38: Ring-Texte - altes Erklaerwissen bleibt als Tip erhalten.
+  const carbRingExplain = (youth
+    ? "Füllstand der Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Jugend-Ziel – im Wachstum höher angesetzt (Ruhetag 5, Belastungstag 7, Wettkampftag 8 g/kg) und nie stark gedrosselt (RED-S-Schutz). "
+    : "Füllstand deiner Glykogenspeicher: gegessene Kohlenhydrate im Verhältnis zum heutigen Ziel – periodisiert nach Trainingsbelastung (Ruhetag 4, Belastungstag 6, Wettkampftag 8 g/kg). ") +
+    "Heutiges KH-Ziel: " + dailyCarbsPerKg + " g pro kg Körpergewicht – hochgerechnet auf " + dailyTargetG + " g.";
 
   const proteinExplain = youth
     ? "Protein-Ziel: ca. " + targets.proteinPerKg + " g pro kg Körpergewicht – im Jugend-Wachstum etwas höher, wichtig für Muskelaufbau, Knochen und Regeneration."
     : "Protein-Ziel: ca. 1,6 g pro kg Körpergewicht für Muskelerhalt und Regeneration – auch am Ruhetag wichtig.";
 
-  const energyExplain = "Tagesenergie: Grundumsatz " + energyTarget.rmrKcal + " kcal (Schofield-Schätzung nach Alter und Gewicht) plus Alltag " + energyTarget.dailyLifeKcal + " kcal (Faktor 1,4) plus Training " + energyTarget.trainingKcal + " kcal (METs aus Dauer und Intensität) = ca. " + energyTarget.totalKcal + " kcal. Schätzwert – der Balken füllt sich über den Tag aus den geloggten Makros (4 kcal/g KH und Protein, 9 kcal/g Fett).";
+  const energyExplain = "Tagesenergie: Grundumsatz " + energyTarget.rmrKcal + " kcal (Schofield-Schätzung nach Alter und Gewicht) plus Alltag " + energyTarget.dailyLifeKcal + " kcal (Faktor 1,4) plus Training " + energyTarget.trainingKcal + " kcal (METs aus Dauer und Intensität) = ca. " + energyTarget.totalKcal + " kcal. Schätzwert – der Ring füllt sich über den Tag aus den geloggten Makros (4 kcal/g KH und Protein, 9 kcal/g Fett).";
+
+  const carbRest = loggedCarbs >= dailyTargetG
+    ? "Ziel erreicht – stark!"
+    : "noch " + Math.round(dailyTargetG - loggedCarbs) + " g";
+  const proteinRest = loggedProtein >= proteinTargetG
+    ? "Ziel erreicht"
+    : "noch " + Math.round(proteinTargetG - loggedProtein) + " g";
+  const energyRest = balance.loggedKcal >= energyTarget.totalKcal
+    ? "Ziel erreicht"
+    : "noch " + Math.round(energyTarget.totalKcal - balance.loggedKcal) + " kcal";
 
   let nextStep: string;
   if (todays.length === 0) {
@@ -249,53 +289,67 @@ export default function DaySummary({
 
   return (
     <div className="card summary">
-      <h2>
-        {dateLabel} <span className={"badge badge-" + dayType}>{dayTypeLabel(dayType)}</span>
-        {youth ? <span className="badge badge-youth">Jugend U15-U19</span> : null}
-      </h2>
-      {todays.length === 0 ? (
-        <p className="muted">Keine Einheiten an diesem Tag.</p>
-      ) : (
-        <p className="muted">
-          {todays.length} {todays.length === 1 ? "Einheit" : "Einheiten"} · {minutes} min · {plannedCarbs} g KH geplant · {liters} l Flüssigkeit
-        </p>
-      )}
-
-      <div className="glycogen">
-        <div className="glycogen-head">
-          <span className="glycogen-label">
-            Tagesenergie (KH) <Tip text={glycogenTip} />
-          </span>
-          <span className="glycogen-pct">{dailyTargetG > 0 ? Math.min(100, Math.round((loggedCarbs / dailyTargetG) * 100)) : 0}%</span>
-        </div>
-        <div className="track track-big">
-          <div
-            className={"fill" + (loggedCarbs >= dailyTargetG ? " fill-green" : loggedCarbs >= dailyTargetG * 0.6 ? " fill-amber" : "")}
-            style={{ width: (dailyTargetG > 0 ? Math.min(100, (loggedCarbs / dailyTargetG) * 100) : 0) + "%" }}
-          />
-        </div>
+      <div className="sumhead">
+        <h2>
+          {dateLabel} <span className={"badge badge-" + dayType}>{dayTypeLabel(dayType)}</span>
+          {youth ? <span className="badge badge-youth">Jugend U15-U19</span> : null}
+        </h2>
+        <button
+          type="button"
+          className="sumhead-edit"
+          onClick={onEditDay}
+          title="Mahlzeiten, Snacks und Anlässe dieses Tages anpassen"
+        >
+          Tag anpassen
+        </button>
       </div>
 
-      <div className="macros">
-        <Bar
+      <div className="traincard">
+        <div className="traincard-head">
+          <span className="traincard-title">
+            Training <Tip text="Deine Einheiten dieses Tages. Bearbeiten öffnet die Einheit mit ihrem vollen Fueling-Plan – änderst du Dauer oder Intensität, rechnen Ringe, Timeline und Mahlzeitziele sofort neu." />
+          </span>
+          {todays.length > 0 ? (
+            <span className="traincard-sum">{minutes} min · {plannedCarbs} g KH geplant · {liters} l Flüssigkeit</span>
+          ) : null}
+        </div>
+        {todays.length === 0 ? (
+          <span className="muted">Keine Einheiten an diesem Tag.</span>
+        ) : (
+          <div className="trainrows">
+            {todays.map((s) => (
+              <div className="trainrow" key={s.id ?? s.sport + (s.session_start ?? "")}>
+                <span className="trainrow-when">{s.session_start || "—"}</span>
+                <span className="trainrow-name">{s.sport} · {s.duration_min} min · {intensityText(s.intensity)}</span>
+                <button type="button" className="trainrow-edit" onClick={() => onSelectSession(s)}>
+                  Bearbeiten
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rings">
+        <Ring
+          pct={dailyTargetG > 0 ? (loggedCarbs / dailyTargetG) * 100 : 0}
+          color="#22c55e"
           label="Kohlenhydrate"
-          unit="g"
-          value={loggedCarbs}
-          max={dailyTargetG}
-          explain={carbsExplain}
+          rest={carbRest}
+          explain={carbRingExplain}
         />
-        <Bar
+        <Ring
+          pct={proteinTargetG > 0 ? (loggedProtein / proteinTargetG) * 100 : 0}
+          color="#3b82f6"
           label="Protein"
-          unit="g"
-          value={loggedProtein}
-          max={proteinTargetG}
+          rest={proteinRest}
           explain={proteinExplain}
         />
-        <Bar
+        <Ring
+          pct={energyTarget.totalKcal > 0 ? (balance.loggedKcal / energyTarget.totalKcal) * 100 : 0}
+          color="#fbbf24"
           label="Energie"
-          unit="kcal"
-          value={balance.loggedKcal}
-          max={energyTarget.totalKcal}
+          rest={energyRest}
           explain={energyExplain}
         />
       </div>
@@ -314,7 +368,7 @@ export default function DaySummary({
 
       <div className="timeline">
         <span className="timeline-title">
-          Timeline <Tip text="Dein Tag im Überblick: gestrichelte Kacheln sind geplant – graue aus deiner Routine mit Ziel (Farbe = KH-Betonung), blaue sind Fueling-Fenster um deine Einheit (Vor / Während / Danach) mit konkreten Gramm- und Trinkzielen. Mahlzeiten mit Einheits-Bezug tragen einen blauen Verweis, z. B. Frühstück → Laufen. Ausgefüllte Kacheln sind alles, was du geloggt hast – auch jeder zusätzliche Snack. Log-Farben: Blau = vor der Einheit, Gelb = während, Grün = danach, Grau = Snack/sonstige." />
+          Timeline <Tip text="Dein Tag im Überblick: gestrichelte Kacheln sind geplant – graue aus deiner Routine mit Ziel (Farbe = KH-Betonung), blaue sind Fueling-Fenster um deine Einheit (Vor / Während / Danach). Tippe eine gestrichelte Kachel an, um den Tag anzupassen; tippe eine ausgefüllte Kachel an, um den Log zu bearbeiten oder zu löschen. Mahlzeiten mit Einheits-Bezug tragen einen blauen Verweis, z. B. Frühstück → Laufen. Log-Farben: Blau = vor der Einheit, Gelb = während, Grün = danach, Grau = Snack/sonstige." />
         </span>
         {feed.length === 0 ? (
           <span className="muted timeline-empty">Noch nichts an diesem Tag – tippe unten auf + zum Loggen.</span>
@@ -324,30 +378,40 @@ export default function DaySummary({
               f.kind === "slot" ? (
                 <div className="feedrow" key={"p" + i + f.slot.time}>
                   <span className="feedtime">{f.slot.time}</span>
-                  <div className="slottile">
+                  <button
+                    type="button"
+                    className="slottile"
+                    onClick={onEditDay}
+                    title="Anlass anpassen – nur dieser Tag oder ab jetzt jede Wiederholung"
+                  >
                     <span className={"calslot-dot " + f.slot.color} />
                     <span className="tile-name">{f.slot.label}</span>
                     {f.slot.sessionLabel ? (
                       <span className="slottile-link">→ {f.slot.sessionLabel} {f.slot.sessionTime}</span>
                     ) : null}
                     <span className="slottile-target">Ziel ≈ {f.slot.carbsG} g KH · {f.slot.proteinG} g P</span>
-                    <Tip text={f.slot.explanation !== "" ? f.slot.explanation : "Geplanter Anlass aus deiner Routine – periodisiert gegen dein Training."} />
-                  </div>
+                    <Tip text={f.slot.explanation !== "" ? f.slot.explanation : "Geplanter Anlass aus deiner Routine – periodisiert gegen dein Training. Antippen zum Anpassen."} />
+                  </button>
                 </div>
               ) : f.kind === "meal" ? (
                 <div className="feedrow" key={"m" + i}>
                   <span className="feedtime">{f.time}</span>
-                  <div className={"mealtile tile-" + f.log.phase}>
-                    <div className="tile-head">
+                  <button
+                    type="button"
+                    className={"mealtile tile-" + f.log.phase}
+                    onClick={() => onEditLog(f.log)}
+                    title="Log ansehen, korrigieren oder löschen"
+                  >
+                    <span className="tile-head">
                       <span className="tile-name">{f.log.name}</span>
                       <span className="tile-phase">{phaseText[f.log.phase]}</span>
-                    </div>
-                    <div className="tile-macros">
+                    </span>
+                    <span className="tile-macros">
                       <span><strong>{Math.round(Number(f.log.carbs_g))}</strong> g KH</span>
                       <span><strong>{Math.round(Number(f.log.protein_g))}</strong> g P</span>
                       <span><strong>{Math.round(Number(f.log.fat_g))}</strong> g F</span>
-                    </div>
-                  </div>
+                    </span>
+                  </button>
                 </div>
               ) : f.kind === "fueling" ? (
                 <div className="feedrow" key={"fu" + i + f.cp.key + f.cp.time}>
@@ -399,8 +463,6 @@ export default function DaySummary({
       )}
 
       <div className="nextstep">{nextStep}</div>
-      <CarbAmpel phases={phases} />
     </div>
   );
 }
-

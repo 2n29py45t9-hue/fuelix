@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { buildCarbAmpel, calculateFuelingPlan, inferLogPhase } from "./lib/fueling";
+import { clearFutureOverrides, saveOverrideForDate, saveRoutineForWeekday } from "./lib/mealSchedule";
 import { buildSessionsCsv, downloadCsv } from "./lib/csv";
-import { hhmmNow, localIso } from "./lib/date";
+import { hhmmNow, localIso, weekdayIndexMondayFirst } from "./lib/date";
 import type { FuelingPlan, MealLog, MealOverride, MealSlot, TrainingSession } from "./types";
 import Auth from "./components/Auth";
 import SessionForm from "./components/SessionForm";
@@ -16,6 +17,8 @@ import QuickLog from "./components/QuickLog";
 import RaceDayWizard from "./components/RaceDayWizard";
 import BottomNav from "./components/BottomNav";
 import MealCalendar from "./components/MealCalendar";
+import MealDayEditor, { type MealEditScope } from "./components/MealDayEditor";
+import MealLogEditor from "./components/MealLogEditor";
 import StravaSync from "./components/StravaSync";
 import Onboarding from "./components/Onboarding";
 import { consumeHandoff } from "./lib/strava";
@@ -35,6 +38,10 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(localIso());
   const [activeTab, setActiveTab] = useState<Tab>("plan");
   const [logSheet, setLogSheet] = useState(false);
+  const [sessionSheet, setSessionSheet] = useState(false);
+  const [editDate, setEditDate] = useState<string | null>(null);
+  const [editLog, setEditLog] = useState<MealLog | null>(null);
+  const [editError, setEditError] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -95,6 +102,27 @@ export default function App() {
     }
     setStatus("Gespeichert.");
     setTimeout(() => setStatus(""), 2000);
+  };
+
+  // DUO-45: "Tag anpassen" - Mahlzeiten/Anlässe des ausgewählten Tages
+  // editieren mit Notion-Logik: nur dieses Datum (Override) oder ab
+  // jetzt jede Wiederholung dieses Wochentags (Routine).
+  const saveDay = async (slots: { time: string; label: string; primary: boolean }[], scope: MealEditScope) => {
+    if (!editDate) return;
+    setEditError("");
+    try {
+      const weekday = weekdayIndexMondayFirst(editDate);
+      if (scope === "once") {
+        await saveOverrideForDate(editDate, slots);
+      } else {
+        await saveRoutineForWeekday(weekday, slots);
+        await clearFutureOverrides(weekday, editDate);
+      }
+      setEditDate(null);
+      load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Speichern fehlgeschlagen.");
+    }
   };
 
   const plan: FuelingPlan | null = selected
@@ -165,20 +193,41 @@ export default function App() {
       <main className="appmain">
         {activeTab === "plan" ? (
           <>
-            <DayScroller selected={selectedDate} onSelect={setSelectedDate} sessions={sessions} />
-            <DaySummary date={selectedDate} sessions={sessions} weightKg={weightKg} mealLogs={mealLogs} birthYear={birthYear} mealSchedule={mealSchedule} overrides={mealOverrides} onSelectSession={showSession} />
-            <div className="grid">
-              <SessionForm
-                defaultSport={mainSport}
-                onCreated={(s) => {
-                  setSelected(s);
-                  setSelectedDate(s.session_date);
-                  load();
-                }}
-              />
-              <div id="plancard">
-                <PlanCard session={selected} plan={plan} ampel={ampel} />
-              </div>
+            <DayScroller selected={selectedDate} onSelect={setSelectedDate} sessions={sessions} mealLogs={mealLogs} weightKg={weightKg} birthYear={birthYear} />
+            <DaySummary
+              date={selectedDate}
+              sessions={sessions}
+              weightKg={weightKg}
+              mealLogs={mealLogs}
+              birthYear={birthYear}
+              mealSchedule={mealSchedule}
+              overrides={mealOverrides}
+              onSelectSession={showSession}
+              onEditDay={() => {
+                setEditError("");
+                setEditDate(selectedDate);
+              }}
+              onEditLog={(log) => {
+                setEditError("");
+                setEditLog(log);
+              }}
+            />
+            <div className="homecapture">
+              <button
+                type="button"
+                className="capturebtn"
+                onClick={() => setSessionSheet(true)}
+                aria-label="Training manuell erfassen"
+                title="Training manuell erfassen – dein Plan erscheint sofort"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span>Training erfassen</span>
+              </button>
+            </div>
+            <div id="plancard">
+              {selected ? <PlanCard session={selected} plan={plan} ampel={ampel} /> : null}
             </div>
             <RaceDayWizard sessions={sessions} weightKg={weightKg} />
           </>
@@ -261,6 +310,55 @@ export default function App() {
               defaultPhase={quickPhase}
               recentLogs={mealLogs.slice(0, 30)}
               sessionFuelG={sessionFuelG}
+            />
+          </div>
+        </>
+      ) : null}
+
+      {sessionSheet ? (
+        <>
+          <div className="sheet-backdrop" onClick={() => setSessionSheet(false)} />
+          <div className="sheet">
+            <SessionForm
+              defaultSport={mainSport}
+              onCreated={(s) => {
+                setSelected(s);
+                setSelectedDate(s.session_date);
+                setSessionSheet(false);
+                load();
+              }}
+            />
+          </div>
+        </>
+      ) : null}
+
+      {editDate ? (
+        <>
+          <div className="sheet-backdrop" onClick={() => setEditDate(null)} />
+          <div className="sheet">
+            <MealDayEditor
+              dateIso={editDate}
+              mealSchedule={mealSchedule}
+              overrides={mealOverrides}
+              onSave={saveDay}
+              onClose={() => setEditDate(null)}
+            />
+            {editError ? <p className="error">{editError}</p> : null}
+          </div>
+        </>
+      ) : null}
+
+      {editLog ? (
+        <>
+          <div className="sheet-backdrop" onClick={() => setEditLog(null)} />
+          <div className="sheet">
+            <MealLogEditor
+              log={editLog}
+              onSaved={() => {
+                setEditLog(null);
+                load();
+              }}
+              onClose={() => setEditLog(null)}
             />
           </div>
         </>
