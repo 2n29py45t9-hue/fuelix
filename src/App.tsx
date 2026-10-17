@@ -39,6 +39,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("plan");
   const [logSheet, setLogSheet] = useState(false);
   const [sessionSheet, setSessionSheet] = useState(false);
+  const [raceSheet, setRaceSheet] = useState(false);
   const [sessionFormDate, setSessionFormDate] = useState(localIso());
   const [editDate, setEditDate] = useState<string | null>(null);
   const [editLog, setEditLog] = useState<MealLog | null>(null);
@@ -240,11 +241,23 @@ export default function App() {
                 </svg>
                 <span>Training erfassen</span>
               </button>
+              <button
+                type="button"
+                className="capturebtn racebtn"
+                onClick={() => setRaceSheet(true)}
+                aria-label="Renntag planen"
+                title="Zukünftiges Rennen planen – wird als Einheit im Kalender angelegt"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 21V4" />
+                  <path d="M5 4h13l-2.5 4L18 12H5" />
+                </svg>
+                <span>Renntag planen</span>
+              </button>
             </div>
             <div id="plancard">
               {selected ? <PlanCard session={selected} plan={plan} ampel={ampel} /> : null}
             </div>
-            <RaceDayWizard sessions={sessions} weightKg={weightKg} />
           </>
         ) : null}
         {activeTab === "kalender" ? (
@@ -351,6 +364,23 @@ export default function App() {
                 setSelected(s);
                 setSelectedDate(s.session_date);
                 setSessionSheet(false);
+                load();
+              }}
+            />
+          </div>
+        </>
+      ) : null}
+
+      {raceSheet ? (
+        <>
+          <div className="sheet-backdrop" onClick={() => setRaceSheet(false)} />
+          <div className="sheet">
+            <RaceDayWizard
+              sessions={sessions}
+              weightKg={weightKg}
+              onCreated={(s) => {
+                setSelected(s);
+                setSelectedDate(s.session_date);
                 load();
               }}
             />

@@ -345,3 +345,7 @@ button.mealtile:hover { filter: brightness(1.18); }
 .mse-train-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .mse-train-row input { width: 110px; }
 .mse-train-name { font-size: 13px; color: #e2e8f0; }
+
+/* ===== DUO-41: Race-Day-Paket - Renntag-Button neben dem Capture-Button, Wizard im Sheet ===== */
+.homecapture { gap: 10px; flex-wrap: wrap; }
+.racebtn svg { background: #f59e0b; }
